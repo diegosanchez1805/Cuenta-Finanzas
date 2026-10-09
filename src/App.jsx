@@ -47,6 +47,26 @@ export default function App() {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [activeTab, setActiveTab] = useState('movimientos'); // 'movimientos' | 'ahorros'
 
+  // Tema: 'dark' | 'light' (por defecto 'dark', persistido en localStorage)
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('theme') || 'dark';
+  });
+
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Estados de modales
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
@@ -182,20 +202,24 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0b0f19]">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0b0f19]">
         <div className="w-9 h-9 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!currentUser) {
-    return <AuthScreen />;
+    return <AuthScreen theme={theme} onToggleTheme={handleToggleTheme} />;
   }
 
   return (
-    <div className="min-h-screen pb-28 bg-[#0b0f19] text-slate-100 selection:bg-indigo-500 selection:text-white">
-      {/* Header global */}
-      <Header onLogout={() => signOut(auth)} />
+    <div className="min-h-screen pb-28 bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white transition-colors duration-150">
+      {/* Header global con selector de Modo Oscuro / Claro y Logout */}
+      <Header
+        onLogout={() => signOut(auth)}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+      />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
         {/* Balance Hero con selector de meses */}
@@ -213,18 +237,18 @@ export default function App() {
           onOpenWalletModal={handleOpenWalletModal}
         />
 
-        {/* Pestañas: Segmented Control en estilo oscuro refinado */}
-        <div className="flex p-1 bg-slate-900 border border-slate-800 rounded-2xl mb-6 max-w-sm shadow-md">
+        {/* Pestañas: Segmented Control adaptativo para Modo Claro y Oscuro */}
+        <div className="flex p-1 bg-slate-200/80 dark:bg-slate-900 border border-slate-300/70 dark:border-slate-800 rounded-2xl mb-6 max-w-sm shadow-sm dark:shadow-md transition-colors">
           <button
             onClick={() => setActiveTab('movimientos')}
             type="button"
             className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
               activeTab === 'movimientos'
-                ? 'bg-slate-800 text-white shadow-md border border-slate-700/60'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white text-indigo-700 dark:bg-slate-800 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/70'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <ReceiptText className="w-4 h-4" />
+            <ReceiptText className={`w-4 h-4 ${activeTab === 'movimientos' ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
             <span>Movimientos</span>
           </button>
           <button
@@ -232,11 +256,11 @@ export default function App() {
             type="button"
             className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
               activeTab === 'ahorros'
-                ? 'bg-slate-800 text-white shadow-md border border-slate-700/60'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white text-indigo-700 dark:bg-slate-800 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/70'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <PiggyBank className="w-4 h-4" />
+            <PiggyBank className={`w-4 h-4 ${activeTab === 'ahorros' ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
             <span>Metas de Ahorro</span>
           </button>
         </div>
@@ -249,10 +273,12 @@ export default function App() {
               allTx={allTx}
               viewYear={viewYear}
               viewMonth={viewMonth}
+              isDark={isDark}
             />
             <TransactionList
               monthTx={monthTx}
               onDeleteTransaction={handleDeleteTransaction}
+              isDark={isDark}
             />
           </div>
         )}
@@ -264,6 +290,7 @@ export default function App() {
             onOpenNewGoalModal={() => setIsGoalModalOpen(true)}
             onOpenDepositModal={handleOpenDepositModal}
             onDeleteGoal={handleDeleteGoal}
+            isDark={isDark}
           />
         )}
       </main>

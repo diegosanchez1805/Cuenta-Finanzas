@@ -73,29 +73,29 @@ export default function DepositModal({ isOpen, goal, onClose, onSave }) {
     >
       <form
         onSubmit={handleSubmit}
-        className="bg-slate-900 rounded-t-3xl sm:rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-800 modal-animate-enter text-white"
+        className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-200/80 dark:border-slate-800 modal-animate-enter text-slate-900 dark:text-white transition-colors"
       >
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
-          <h2 className="font-bold text-base sm:text-lg text-white truncate">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-5">
+          <h2 className="font-bold text-base sm:text-lg text-slate-900 dark:text-white truncate">
             Mover dinero — {goal.name}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl mb-4 border border-slate-800/80">
+        <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl mb-4 border border-slate-200 dark:border-slate-800/80">
           <button
             type="button"
             onClick={() => setDepositType('abonar')}
             className={`py-2 text-xs font-bold rounded-lg transition-all ${
               depositType === 'abonar'
                 ? 'bg-emerald-500 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Abonar
@@ -106,7 +106,7 @@ export default function DepositModal({ isOpen, goal, onClose, onSave }) {
             className={`py-2 text-xs font-bold rounded-lg transition-all ${
               depositType === 'retirar'
                 ? 'bg-rose-500 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Retirar
@@ -114,11 +114,11 @@ export default function DepositModal({ isOpen, goal, onClose, onSave }) {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
             Monto a mover ($)
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center font-bold text-slate-500 pointer-events-none text-sm">
+            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center font-bold text-slate-400 dark:text-slate-500 pointer-events-none text-sm">
               $
             </span>
             <input
@@ -129,7 +129,7 @@ export default function DepositModal({ isOpen, goal, onClose, onSave }) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               required
-              className="w-full pl-8 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl font-mono text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500 transition-all placeholder-slate-600"
+              className="w-full pl-8 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/25 focus:border-indigo-500 transition-all placeholder-slate-400 dark:placeholder-slate-600"
             />
           </div>
         </div>

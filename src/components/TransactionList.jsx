@@ -34,7 +34,7 @@ function getCategoryIcon(catName) {
   }
 }
 
-export default function TransactionList({ monthTx, onDeleteTransaction }) {
+export default function TransactionList({ monthTx, onDeleteTransaction, isDark }) {
   const ingresos = monthTx
     .filter((t) => t.type === 'ingreso')
     .slice()
@@ -52,7 +52,7 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#f43f5e',
-      cancelButtonColor: '#475569',
+      cancelButtonColor: isDark ? '#475569' : '#94a3b8',
       confirmButtonText: 'Sí, borrar',
       cancelButtonText: 'Cancelar'
     }).then((result) => {
@@ -75,13 +75,13 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
 
     if (items.length === 0) {
       return (
-        <div className="bg-slate-900/60 rounded-2xl p-6 text-center border border-slate-800 shadow-sm backdrop-blur-md">
+        <div className="bg-white dark:bg-slate-900/60 rounded-2xl p-6 text-center border border-slate-200/80 dark:border-slate-800 shadow-sm backdrop-blur-md">
           {isIngreso ? (
-            <ArrowDownLeft className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+            <ArrowDownLeft className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           ) : (
-            <ArrowUpRight className="w-7 h-7 text-slate-600 mx-auto mb-2" />
+            <ArrowUpRight className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           )}
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {isIngreso ? 'Aún no hay ingresos registrados este mes.' : 'Aún no hay gastos registrados este mes.'}
           </p>
         </div>
@@ -100,7 +100,7 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
           return (
             <div
               key={t.id}
-              className="group bg-slate-900/70 hover:bg-slate-850/80 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-3.5 flex items-center justify-between transition-all duration-150 shadow-sm backdrop-blur-md"
+              className="group bg-white dark:bg-slate-900/70 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700/80 rounded-2xl p-3.5 flex items-center justify-between transition-all duration-150 shadow-sm backdrop-blur-md"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div
@@ -109,15 +109,15 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
                   <IconComp className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-white truncate">
+                  <div className="text-sm font-bold text-slate-800 dark:text-white truncate">
                     {t.description || t.category}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-medium">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/50 font-medium text-[11px]">
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-transparent dark:border-slate-700/50 font-medium text-[11px]">
                       {t.category}
                     </span>
                     <span>•</span>
-                    <span className="font-mono text-slate-500 text-[11px]">{dateLabel}</span>
+                    <span className="font-mono text-slate-400 dark:text-slate-500 text-[11px]">{dateLabel}</span>
                   </div>
                 </div>
               </div>
@@ -125,7 +125,7 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
               <div className="flex items-center gap-3 pl-3 flex-shrink-0">
                 <span
                   className={`font-mono font-bold text-sm sm:text-base ${
-                    isIngreso ? 'text-emerald-400' : 'text-slate-100'
+                    isIngreso ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'
                   }`}
                 >
                   {isIngreso ? '+' : '−'}{money(t.amount)}
@@ -133,7 +133,7 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
                 <button
                   onClick={() => handleDelete(t)}
                   type="button"
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors opacity-80 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
+                  className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors opacity-80 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
                   title="Eliminar movimiento"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -151,8 +151,8 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
       {/* Columna: Ingresos */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+          <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
             <span>Ingresos</span>
           </h3>
         </div>
@@ -162,7 +162,7 @@ export default function TransactionList({ monthTx, onDeleteTransaction }) {
       {/* Columna: Gastos */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+          <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
             <span>Gastos</span>
           </h3>

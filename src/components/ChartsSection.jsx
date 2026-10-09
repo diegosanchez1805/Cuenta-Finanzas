@@ -21,7 +21,7 @@ ChartJS.register(
   BarElement
 );
 
-export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
+export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isDark }) {
   // 1. Donut: Gastos por categoría del mes actual
   const catMap = {};
   monthTx
@@ -42,7 +42,7 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
           (e) => (CATEGORY_PALETTE[e[0]] || CATEGORY_PALETTE['Otro']).color
         ),
         borderWidth: 2,
-        borderColor: '#0f172a',
+        borderColor: isDark ? '#0f172a' : '#ffffff',
         hoverOffset: 4,
       },
     ],
@@ -61,14 +61,14 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
           usePointStyle: true,
           pointStyle: 'circle',
           font: { size: 11, family: "'Plus Jakarta Sans', sans-serif", weight: 600 },
-          color: '#94a3b8',
+          color: isDark ? '#94a3b8' : '#475569',
           padding: 12,
         },
       },
       tooltip: {
-        backgroundColor: '#020617',
-        borderColor: '#334155',
-        borderWidth: 1,
+        backgroundColor: isDark ? '#020617' : '#0f172a',
+        borderColor: isDark ? '#334155' : 'transparent',
+        borderWidth: isDark ? 1 : 0,
         titleColor: '#ffffff',
         bodyColor: '#e2e8f0',
         titleFont: { size: 12, family: "'Plus Jakarta Sans', sans-serif" },
@@ -143,13 +143,13 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
           usePointStyle: true,
           pointStyle: 'circle',
           font: { size: 11, family: "'Plus Jakarta Sans', sans-serif", weight: 600 },
-          color: '#94a3b8',
+          color: isDark ? '#94a3b8' : '#64748b',
         },
       },
       tooltip: {
-        backgroundColor: '#020617',
-        borderColor: '#334155',
-        borderWidth: 1,
+        backgroundColor: isDark ? '#020617' : '#0f172a',
+        borderColor: isDark ? '#334155' : 'transparent',
+        borderWidth: isDark ? 1 : 0,
         titleColor: '#ffffff',
         bodyColor: '#e2e8f0',
         titleFont: { size: 12, family: "'Plus Jakarta Sans', sans-serif" },
@@ -170,7 +170,7 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
         grid: { display: false },
         ticks: {
           font: { size: 11, family: "'Plus Jakarta Sans', sans-serif", weight: 600 },
-          color: '#64748b',
+          color: isDark ? '#64748b' : '#94a3b8',
         },
       },
     },
@@ -179,15 +179,15 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
       {/* Gráfica de Categorías */}
-      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col justify-between backdrop-blur-md">
+      <div className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl flex flex-col justify-between backdrop-blur-md transition-colors">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-              <PieIcon className="w-4 h-4 text-indigo-400" />
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
+              <PieIcon className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
               <span>¿En qué se fue el dinero?</span>
             </h3>
           </div>
-          <p className="text-xs text-slate-400 mb-4">Distribución de gastos por categoría</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Distribución de gastos por categoría</p>
         </div>
 
         <div className="relative flex items-center justify-center min-h-[190px]">
@@ -197,10 +197,10 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
             </div>
           ) : (
             <div className="text-center py-8">
-              <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-slate-500 mx-auto mb-2">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-slate-400 dark:text-slate-500 mx-auto mb-2">
                 <Receipt className="w-6 h-6" />
               </div>
-              <p className="text-xs font-medium text-slate-400">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 Sin gastos registrados en este mes.
               </p>
             </div>
@@ -209,15 +209,15 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth }) {
       </div>
 
       {/* Gráfica de Tendencia */}
-      <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col justify-between backdrop-blur-md">
+      <div className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl flex flex-col justify-between backdrop-blur-md transition-colors">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-indigo-400" />
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
               <span>Tendencia semestral</span>
             </h3>
           </div>
-          <p className="text-xs text-slate-400 mb-4">Comparativa de ingresos vs gastos</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Comparativa de ingresos vs gastos</p>
         </div>
 
         <div className="relative flex items-center justify-center min-h-[190px]">
