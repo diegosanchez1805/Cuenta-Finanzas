@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cuenta Clara — Finanzas Personales</title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Firebase Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          },
+          boxShadow: {
+            'card': '0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
+            'card-hover': '0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.05)',
+            'glow-income': '0 4px 20px -2px rgba(16, 185, 129, 0.25)',
+            'glow-expense': '0 4px 20px -2px rgba(244, 63, 94, 0.25)',
+            'glow-brand': '0 8px 24px -4px rgba(99, 102, 241, 0.35)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js & SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    /* Estilos base y transiciones suaves */
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Ocultar elementos */
+    .hidden {
+      display: none !important;
+    }
+
+    /* Animaciones suaves para modales */
+    .modal-animate-enter {
+      animation: modalFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes modalFadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    /* Barra de desplazamiento estética */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Personalización de SweetAlert2 para acoplarse al diseño */
+    .swal2-popup {
+      font-family: 'Plus Jakarta Sans', sans-serif !important;
+      border-radius: 1.25rem !important;
+      padding: 1.75rem !important;
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1) !important;
+    }
+    .swal2-title {
+      font-weight: 700 !important;
+      color: #0f172a !important;
+      font-size: 1.25rem !important;
+    }
+    .swal2-html-container {
+      color: #64748b !important;
+      font-size: 0.95rem !important;
+    }
+  </style>
+</head>
+<body class="min-h-full bg-slate-50 text-slate-900 selection:bg-indigo-500 selection:text-white">
+
+  <!-- ========================================== -->
+  <!-- 1. PANTALLA DE AUTENTICACIÓN (LOGIN)      -->
+  <!-- ========================================== -->
+  <div id="login-screen" class="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-indigo-50/40 to-slate-100">
+    <div class="w-full max-w-md">
+      <!-- Tarjeta Principal de Login -->
+      <div class="bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-3xl p-8 sm:p-10 shadow-xl shadow-slate-200/50">
+        
+        <!-- Logo e Identidad -->
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-500/30 mb-4 ring-4 ring-indigo-50">
+            <i data-lucide="wallet" class="w-7 h-7"></i>
+          </div>
+          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Cuenta Personal</h1>
+          <p class="text-sm text-slate-500 mt-1">Tus finanzas personales, simples y bajo control.</p>
+        </div>
+
+        <!-- Formulario -->
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5 ml-1">Correo electrónico</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="mail" class="w-4 h-4"></i>
+              </div>
+              <input 
+                id="login-email" 
+                type="email" 
+                placeholder="tu@correo.com" 
+                class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5 ml-1">Contraseña</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="lock" class="w-4 h-4"></i>
+              </div>
+              <input 
+                id="login-pass" 
+                type="password" 
+                placeholder="••••••••" 
+                class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          <button 
+            id="btn-login" 
+            class="w-full py-3.5 px-4 mt-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold text-sm rounded-xl shadow-lg shadow-indigo-600/25 transition-all duration-200 hover:shadow-indigo-600/40 active:scale-[0.99] flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+            <span>Entrar</span>
+          </button>
+
+          <div class="pt-2 text-center">
+            <button 
+              id="btn-toggle-mode" 
+              class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline transition-colors focus:outline-none">
+              ¿No tienes cuenta? Créala aquí
+            </button>
+          </div>
+        </div>
+
+      </div>
+      
+      <!-- Pie de página de Login -->
+      <p class="text-center text-xs text-slate-400 mt-6 flex items-center justify-center gap-1.5">
+        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>
+        <span>Datos sincronizados de forma segura con Firebase</span>
+      </p>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- 2. PANTALLA PRINCIPAL (APP SCREEN)       -->
+  <!-- ========================================== -->
+  <div id="app-screen" class="hidden min-h-screen pb-28">
+    
+    <!-- Barra Superior / Header Global -->
+    <header class="bg-slate-900 text-white border-b border-slate-800/80 sticky top-0 z-30 backdrop-blur-md bg-slate-900/95">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+            <i data-lucide="wallet" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <span class="font-bold text-base tracking-tight text-white block leading-tight">Cuenta Personal</span>
+            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold block">Control Financiero</span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button 
+            id="btn-logout" 
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            title="Cerrar sesión">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Cerrar sesión</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
+      
+      <!-- HERO CARD: BALANCE GENERAL & CONTROL DE MES -->
+      <section class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-slate-900/10 border border-slate-800 mb-6">
+        
+        <!-- Elemento de fondo sutil (Mesh Glow) -->
+        <div class="absolute -right-20 -bottom-20 w-72 h-72 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -left-20 -top-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          
+          <!-- Lado Izquierdo: Saldo y Mes -->
+          <div>
+            <!-- Selector de Mes -->
+            <div class="inline-flex items-center gap-1 bg-slate-800/90 border border-slate-700/80 rounded-full px-2 py-1 mb-4">
+              <button 
+                id="btn-prev" 
+                class="w-7 h-7 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors focus:outline-none" 
+                aria-label="Mes anterior">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+              </button>
+              <span id="month-label" class="text-xs font-semibold px-2 text-slate-200 tracking-wide select-none min-w-[110px] text-center"></span>
+              <button 
+                id="btn-next" 
+                class="w-7 h-7 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors focus:outline-none" 
+                aria-label="Mes siguiente">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Etiqueta y Monto Principal -->
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Balance del mes</div>
+            <div id="balance-value" class="text-3xl sm:text-5xl font-extrabold tracking-tight font-mono text-emerald-400 mt-1 transition-colors">
+              $0.00
+            </div>
+          </div>
+
+          <!-- Lado Derecho: Tarjetas resumen de Ingresos y Gastos -->
+          <div class="grid grid-cols-2 gap-3 sm:gap-4 md:w-80">
+            
+            <!-- Card Ingresos -->
+            <div class="bg-slate-800/80 border border-emerald-500/20 rounded-2xl p-3.5 sm:p-4 backdrop-blur-sm">
+              <div class="flex items-center gap-2 mb-1.5">
+                <div class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <i data-lucide="arrow-down-left" class="w-4 h-4"></i>
+                </div>
+                <span class="text-xs font-semibold text-slate-300">Ingresos</span>
+              </div>
+              <div id="total-ingreso" class="text-base sm:text-lg font-bold font-mono text-emerald-400 truncate">
+                $0.00
+              </div>
+            </div>
+
+            <!-- Card Gastos -->
+            <div class="bg-slate-800/80 border border-rose-500/20 rounded-2xl p-3.5 sm:p-4 backdrop-blur-sm">
+              <div class="flex items-center gap-2 mb-1.5">
+                <div class="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                </div>
+                <span class="text-xs font-semibold text-slate-300">Gastos</span>
+              </div>
+              <div id="total-egreso" class="text-base sm:text-lg font-bold font-mono text-rose-400 truncate">
+                $0.00
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+      <!-- SECCIÓN: MI DINERO DISPONIBLE (TARJETA Y EFECTIVO) -->
+      <section class="mb-6">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Mi dinero disponible</span>
+            <span id="total-disponible-badge" class="px-2.5 py-0.5 rounded-full bg-slate-200/80 text-[11px] font-mono font-bold text-slate-700">Total: $0.00</span>
+          </div>
+          <button 
+            id="btn-quick-adjust-wallets" 
+            type="button"
+            class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 focus:outline-none"
+            title="Ajustar dinero en tarjeta o efectivo">
+            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+            <span>Ajustar saldos</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <!-- Tarjeta: En Tarjeta -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all duration-200 flex items-center justify-between group">
+            <div class="flex items-center gap-3.5 min-w-0">
+              <div class="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="credit-card" class="w-5 h-5"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">En Tarjeta</div>
+                <div id="wallet-card-value" class="text-xl sm:text-2xl font-bold font-mono text-slate-900 mt-0.5 truncate">
+                  $0.00
+                </div>
+              </div>
+            </div>
+            <button 
+              id="btn-edit-card" 
+              type="button"
+              class="px-2.5 py-1.5 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200/60 hover:border-indigo-100 transition-all flex items-center gap-1.5 text-xs font-semibold focus:outline-none"
+              title="Ajustar saldo en tarjeta">
+              <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              <span>Editar</span>
+            </button>
+          </div>
+
+          <!-- Tarjeta: En Efectivo -->
+          <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all duration-200 flex items-center justify-between group">
+            <div class="flex items-center gap-3.5 min-w-0">
+              <div class="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="banknote" class="w-5 h-5"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">En Efectivo</div>
+                <div id="wallet-cash-value" class="text-xl sm:text-2xl font-bold font-mono text-slate-900 mt-0.5 truncate">
+                  $0.00
+                </div>
+              </div>
+            </div>
+            <button 
+              id="btn-edit-cash" 
+              type="button"
+              class="px-2.5 py-1.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border border-slate-200/60 hover:border-emerald-100 transition-all flex items-center gap-1.5 text-xs font-semibold focus:outline-none"
+              title="Ajustar dinero en efectivo">
+              <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+              <span>Editar</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- BARRA DE PESTAÑAS (SEGMENTED CONTROL) -->
+      <div class="flex p-1 bg-slate-200/70 rounded-2xl mb-6 max-w-sm">
+        <button 
+          id="tab-mov" 
+          class="flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 bg-white text-indigo-700 shadow-sm">
+          <i data-lucide="receipt-text" class="w-4 h-4"></i>
+          <span>Movimientos</span>
+        </button>
+        <button 
+          id="tab-ahorros" 
+          class="flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 text-slate-600 hover:text-slate-900">
+          <i data-lucide="piggy-bank" class="w-4 h-4"></i>
+          <span>Metas de Ahorro</span>
+        </button>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- VISTA: MOVIMIENTOS                        -->
+      <!-- ========================================== -->
+      <div id="view-movimientos" class="space-y-6">
+        
+        <!-- SECCIÓN DE GRÁFICAS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          
+          <!-- Gráfica de Categorías -->
+          <div class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <h3 class="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                  <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-500"></i>
+                  <span>¿En qué se fue el dinero?</span>
+                </h3>
+              </div>
+              <p class="text-xs text-slate-500 mb-4" id="cat-hint">Distribución de gastos por categoría</p>
+            </div>
+            
+            <div class="relative flex items-center justify-center min-h-[190px]">
+              <div id="cat-empty" class="empty hidden text-center py-8">
+                <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mx-auto mb-2">
+                  <i data-lucide="receipt" class="w-6 h-6"></i>
+                </div>
+                <p class="text-xs font-medium text-slate-500">Sin gastos registrados en este mes.</p>
+              </div>
+              <canvas id="chart-cat" height="190"></canvas>
+            </div>
+          </div>
+
+          <!-- Gráfica de Tendencia (Últimos 6 meses) -->
+          <div class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <h3 class="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                  <i data-lucide="bar-chart-3" class="w-4 h-4 text-indigo-500"></i>
+                  <span>Tendencia semestral</span>
+                </h3>
+              </div>
+              <p class="text-xs text-slate-500 mb-4">Comparativa de ingresos vs gastos</p>
+            </div>
+            
+            <div class="relative flex items-center justify-center min-h-[190px]">
+              <canvas id="chart-trend" height="190"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- LISTAS DE MOVIMIENTOS: INGRESOS & GASTOS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Columna: Ingresos -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between px-1">
+              <h3 class="font-bold text-sm sm:text-base text-slate-900 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span>Ingresos</span>
+              </h3>
+            </div>
+
+            <!-- Estado Vacío -->
+            <div id="ingreso-empty" class="hidden bg-white rounded-2xl p-6 text-center border border-slate-200/80 shadow-sm">
+              <i data-lucide="arrow-down-left" class="w-7 h-7 text-slate-300 mx-auto mb-2"></i>
+              <p class="text-xs text-slate-500">Aún no hay ingresos registrados este mes.</p>
+            </div>
+
+            <!-- Lista de Ingresos -->
+            <div class="space-y-2.5" id="ingreso-list"></div>
+          </div>
+
+          <!-- Columna: Gastos -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between px-1">
+              <h3 class="font-bold text-sm sm:text-base text-slate-900 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span>Gastos</span>
+              </h3>
+            </div>
+
+            <!-- Estado Vacío -->
+            <div id="egreso-empty" class="hidden bg-white rounded-2xl p-6 text-center border border-slate-200/80 shadow-sm">
+              <i data-lucide="arrow-up-right" class="w-7 h-7 text-slate-300 mx-auto mb-2"></i>
+              <p class="text-xs text-slate-500">Aún no hay gastos registrados este mes.</p>
+            </div>
+
+            <!-- Lista de Gastos -->
+            <div class="space-y-2.5" id="egreso-list"></div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- ========================================== -->
+      <!-- VISTA: AHORROS                            -->
+      <!-- ========================================== -->
+      <div id="view-ahorros" class="hidden space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div>
+            <h2 class="font-bold text-base sm:text-lg text-slate-900 flex items-center gap-2">
+              <i data-lucide="target" class="w-5 h-5 text-indigo-600"></i>
+              <span>Tus Metas de Ahorro</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Organiza tu dinero y alcanza tus objetivos paso a paso.</p>
+          </div>
+          <button 
+            id="btn-new-goal" 
+            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Nueva meta</span>
+          </button>
+        </div>
+
+        <!-- Estado Vacío de Ahorros -->
+        <div id="goals-empty" class="hidden bg-white rounded-3xl p-10 text-center border border-slate-200/80 shadow-sm max-w-md mx-auto">
+          <div class="w-16 h-16 rounded-3xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+            <i data-lucide="piggy-bank" class="w-8 h-8"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 text-base mb-1">Sin metas de ahorro</h3>
+          <p class="text-xs text-slate-500 leading-relaxed">Crea tu primera meta financiera para comenzar a apartar y monitorear tu dinero.</p>
+        </div>
+
+        <!-- Grid de Metas -->
+        <div id="goals-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </div>
+
+    </main>
+
+    <!-- BOTÓN FLOTANTE DE ACCIÓN (FAB) -->
+    <button 
+      id="btn-add" 
+      class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-xl shadow-indigo-600/35 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
+      aria-label="Registrar nuevo movimiento">
+      <i data-lucide="plus" class="w-7 h-7 stroke-[2.5]"></i>
+    </button>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- MODALES                                    -->
+  <!-- ========================================== -->
+
+  <!-- 1. Modal: Nuevo Movimiento -->
+  <div id="modal-bg" class="modal-bg hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <form id="tx-form" class="modal bg-white rounded-t-3xl sm:rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-200 modal-animate-enter">
+      
+      <!-- Cabecera -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+        <h2 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-5 h-5 text-indigo-600"></i>
+          <span>Nuevo movimiento</span>
+        </h2>
+        <button type="button" id="btn-close-modal" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Selector Tipo: Gasto / Ingreso -->
+      <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-4">
+        <button 
+          type="button" 
+          id="type-egreso" 
+          class="py-2 text-xs font-bold rounded-lg transition-all text-slate-600">
+          Gasto
+        </button>
+        <button 
+          type="button" 
+          id="type-ingreso" 
+          class="py-2 text-xs font-bold rounded-lg transition-all text-slate-600">
+          Ingreso
+        </button>
+      </div>
+
+      <!-- Campos -->
+      <div class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Monto ($)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center font-bold text-slate-400 pointer-events-none text-sm">$</span>
+            <input 
+              id="f-amount" 
+              type="number" 
+              min="0" 
+              step="0.01" 
+              placeholder="0.00" 
+              required 
+              class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Categoría</label>
+          <select 
+            id="f-category" 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all">
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Descripción (opcional)</label>
+          <input 
+            id="f-description" 
+            type="text" 
+            placeholder="Ej. Supermercado, Alquiler..." 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Fecha</label>
+          <input 
+            id="f-date" 
+            type="date" 
+            required 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+          />
+        </div>
+      </div>
+
+      <!-- Botón Guardar -->
+      <div class="pt-5 mt-2">
+        <button 
+          id="btn-save" 
+          type="submit" 
+          class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all active:scale-[0.99] flex items-center justify-center gap-2">
+          <span>Guardar movimiento</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- 2. Modal: Nueva Meta de Ahorro -->
+  <div id="modal-goal-bg" class="modal-bg hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <form id="goal-form" class="modal bg-white rounded-t-3xl sm:rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-200 modal-animate-enter">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+        <h2 class="font-bold text-lg text-slate-900 flex items-center gap-2">
+          <i data-lucide="piggy-bank" class="w-5 h-5 text-indigo-600"></i>
+          <span>Nueva meta de ahorro</span>
+        </h2>
+        <button type="button" id="btn-close-goal-modal" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Nombre del objetivo</label>
+          <input 
+            id="g-name" 
+            type="text" 
+            placeholder="Ej. Fondo de emergencia, Viaje..." 
+            required 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Monto meta ($)</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center font-bold text-slate-400 pointer-events-none text-sm">$</span>
+            <input 
+              id="g-target" 
+              type="number" 
+              min="0" 
+              step="0.01" 
+              placeholder="0.00" 
+              required 
+              class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-5 mt-2">
+        <button 
+          id="btn-save-goal" 
+          type="submit" 
+          class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all active:scale-[0.99] flex items-center justify-center gap-2">
+          <span>Crear meta</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- 3. Modal: Mover Dinero (Abonar / Retirar) -->
+  <div id="modal-deposit-bg" class="modal-bg hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <form id="deposit-form" class="modal bg-white rounded-t-3xl sm:rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-200 modal-animate-enter">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+        <h2 id="deposit-title" class="font-bold text-base sm:text-lg text-slate-900 truncate">Mover dinero</h2>
+        <button type="button" id="btn-close-deposit-modal" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-4">
+        <button 
+          type="button" 
+          id="dep-abonar" 
+          class="py-2 text-xs font-bold rounded-lg transition-all text-slate-600">
+          Abonar
+        </button>
+        <button 
+          type="button" 
+          id="dep-retirar" 
+          class="py-2 text-xs font-bold rounded-lg transition-all text-slate-600">
+          Retirar
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Monto a mover ($)</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center font-bold text-slate-400 pointer-events-none text-sm">$</span>
+          <input 
+            id="dep-amount" 
+            type="number" 
+            min="0" 
+            step="0.01" 
+            placeholder="0.00" 
+            required 
+            class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+          />
+        </div>
+      </div>
+
+      <div class="pt-5 mt-2">
+        <button 
+          id="btn-save-deposit" 
+          type="submit" 
+          class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all active:scale-[0.99] flex items-center justify-center gap-2">
+          <span>Guardar</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+  <!-- 4. Modal: Ajustar Dinero (Tarjeta / Efectivo) -->
+  <div id="modal-wallet-bg" class="modal-bg hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <form id="wallet-form" class="modal bg-white rounded-t-3xl sm:rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl border border-slate-200 modal-animate-enter">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+        <h2 id="wallet-title" class="font-bold text-lg text-slate-900 flex items-center gap-2">
+          <i data-lucide="wallet" class="w-5 h-5 text-indigo-600"></i>
+          <span>Ajustar dinero disponible</span>
+        </h2>
+        <button type="button" id="btn-close-wallet-modal" class="w-8 h-8 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Selector Tipo: Tarjeta / Efectivo -->
+      <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-4">
+        <button 
+          type="button" 
+          id="wallet-type-card" 
+          class="py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 text-slate-600">
+          <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
+          <span>Tarjeta</span>
+        </button>
+        <button 
+          type="button" 
+          id="wallet-type-cash" 
+          class="py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 text-slate-600">
+          <i data-lucide="banknote" class="w-3.5 h-3.5"></i>
+          <span>Efectivo</span>
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Monto disponible ($)</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center font-bold text-slate-400 pointer-events-none text-sm">$</span>
+          <input 
+            id="wallet-amount" 
+            type="number" 
+            min="0" 
+            step="0.01" 
+            placeholder="0.00" 
+            required 
+            class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white transition-all"
+          />
+        </div>
+        <p class="text-[11px] text-slate-400 mt-1.5">Ingresa la cantidad exacta que tienes en este momento.</p>
+      </div>
+
+      <div class="pt-5 mt-2">
+        <button 
+          id="btn-save-wallet" 
+          type="submit" 
+          class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all active:scale-[0.99] flex items-center justify-center gap-2">
+          <span>Guardar saldo</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT & LÓGICA DE APLICACIÓN          -->
+  <!-- ========================================== -->
+  <script>
+    // ---------- Firebase config ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyB64GgKHTXEjWtpxj-BbXv1gf7hRNC5W88",
+      authDomain: "cuenta-clara-c3dac.firebaseapp.com",
+      projectId: "cuenta-clara-c3dac",
+      storageBucket: "cuenta-clara-c3dac.firebasestorage.app",
+      messagingSenderId: "241468715243",
+      appId: "1:241468715243:web:6874deea6c04872f3dceae"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // ---------- Constantes & Configuración Visual ----------
+    const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const CATS_INGRESO = ["Salario","Freelance","Inversión","Regalo","Otro"];
+    const CATS_EGRESO = ["Comida","Transporte","Vivienda","Servicios","Salud","Entretenimiento","Otro"];
+    
+    // Paleta de colores para categorías (Chart.js y Badges)
+    const CATEGORY_PALETTE = {
+      "Comida": { color: "#f59e0b", icon: "utensils", bg: "bg-amber-50 text-amber-600 border-amber-200" },
+      "Transporte": { color: "#3b82f6", icon: "car", bg: "bg-blue-50 text-blue-600 border-blue-200" },
+      "Vivienda": { color: "#8b5cf6", icon: "home", bg: "bg-purple-50 text-purple-600 border-purple-200" },
+      "Servicios": { color: "#eab308", icon: "zap", bg: "bg-yellow-50 text-yellow-600 border-yellow-200" },
+      "Salud": { color: "#f43f5e", icon: "heart-pulse", bg: "bg-rose-50 text-rose-600 border-rose-200" },
+      "Entretenimiento": { color: "#ec4899", icon: "film", bg: "bg-pink-50 text-pink-600 border-pink-200" },
+      "Salario": { color: "#10b981", icon: "briefcase", bg: "bg-emerald-50 text-emerald-600 border-emerald-200" },
+      "Freelance": { color: "#14b8a6", icon: "laptop", bg: "bg-teal-50 text-teal-600 border-teal-200" },
+      "Inversión": { color: "#6366f1", icon: "trending-up", bg: "bg-indigo-50 text-indigo-600 border-indigo-200" },
+      "Regalo": { color: "#a855f7", icon: "gift", bg: "bg-purple-50 text-purple-600 border-purple-200" },
+      "Otro": { color: "#64748b", icon: "circle-dollar-sign", bg: "bg-slate-50 text-slate-600 border-slate-200" }
+    };
+
+    const money = (n) => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n || 0);
+    const todayISO = () => new Date().toISOString().slice(0, 10);
+    const spinnerSVG = `<svg class="animate-spin h-4 w-4 mr-2 inline-block text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+
+    // ---------- Estado de la Aplicación ----------
+    let currentUser = null;
+    let unsubscribe = null;
+    let unsubscribeSavings = null;
+    let allTx = [];
+    let savingsGoals = [];
+    let wallets = { card: 0, cash: 0 };
+    let unsubscribeWallets = null;
+    let currentWalletType = "card";
+    let viewYear = new Date().getFullYear();
+    let viewMonth = new Date().getMonth();
+    let formType = "egreso";
+    let depositGoalId = null;
+    let depositType = "abonar";
+    let isRegisterMode = false;
+    let chartCat = null;
+    let chartTrend = null;
+
+    // Inicializar iconos de Lucide
+    function refreshIcons() {
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    // ---------- Auth UI & Lógica ----------
+    const loginScreen = document.getElementById("login-screen");
+    const appScreen = document.getElementById("app-screen");
+    const btnToggleMode = document.getElementById("btn-toggle-mode");
+    const btnLogin = document.getElementById("btn-login");
+
+    btnToggleMode.addEventListener("click", () => {
+      isRegisterMode = !isRegisterMode;
+      btnLogin.innerHTML = isRegisterMode ? `<span>Crear cuenta</span>` : `<span>Entrar</span>`;
+      btnToggleMode.textContent = isRegisterMode ? "¿Ya tienes cuenta? Entra aquí" : "¿No tienes cuenta? Créala aquí";
+    });
+
+    btnLogin.addEventListener("click", async () => {
+      const email = document.getElementById("login-email").value.trim();
+      const pass = document.getElementById("login-pass").value;
+      
+      if (!email || !pass) { 
+        Swal.fire({ 
+          icon: 'warning', 
+          title: 'Campos requeridos', 
+          text: 'Por favor, escribe tu correo y contraseña.', 
+          confirmButtonColor: '#6366f1' 
+        });
+        return; 
+      }
+
+      btnLogin.disabled = true;
+      const originalText = btnLogin.innerHTML;
+      btnLogin.innerHTML = `${spinnerSVG} Procesando...`;
+      
+      try {
+        if (isRegisterMode) {
+          await auth.createUserWithEmailAndPassword(email, pass);
+          Swal.fire({ 
+            icon: 'success', 
+            title: '¡Cuenta creada!', 
+            text: 'Bienvenido a Cuenta Clara', 
+            confirmButtonColor: '#10b981', 
+            timer: 2000, 
+            showConfirmButton: false 
+          });
+        } else {
+          await auth.signInWithEmailAndPassword(email, pass);
+        }
+      } catch (e) {
+        Swal.fire({ 
+          icon: 'error', 
+          title: 'Error de acceso', 
+          text: traducirError(e.code), 
+          confirmButtonColor: '#f43f5e' 
+        });
+      } finally {
+        btnLogin.disabled = false;
+        btnLogin.innerHTML = originalText;
+      }
+    });
+
+    document.getElementById("btn-logout").addEventListener("click", () => {
+      Swal.fire({
+        title: '¿Cerrar sesión?',
+        text: 'Tendrás que iniciar sesión de nuevo para ver tus movimientos.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'Sí, salir',
+        cancelButtonText: 'Cancelar'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          auth.signOut();
+        }
+      });
+    });
+
+    function traducirError(code) {
+      const map = {
+        "auth/invalid-email": "Ese correo no es válido.",
+        "auth/user-not-found": "No existe una cuenta con ese correo.",
+        "auth/wrong-password": "Contraseña incorrecta.",
+        "auth/email-already-in-use": "Ya existe una cuenta con ese correo.",
+        "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
+        "auth/invalid-credential": "Correo o contraseña incorrectos.",
+      };
+      return map[code] || "Ocurrió un error. Intenta de nuevo.";
+    }
+
+    auth.onAuthStateChanged((user) => {
+      currentUser = user;
+      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      if (unsubscribeSavings) { unsubscribeSavings(); unsubscribeSavings = null; }
+      if (unsubscribeWallets) { unsubscribeWallets(); unsubscribeWallets = null; }
+      
+      if (user) {
+        loginScreen.classList.add("hidden");
+        appScreen.classList.remove("hidden");
+        listenTransactions();
+        listenSavings();
+        listenWallets();
+      } else {
+        appScreen.classList.add("hidden");
+        loginScreen.classList.remove("hidden");
+        allTx = [];
+        savingsGoals = [];
+        wallets = { card: 0, cash: 0 };
+        renderWallets();
+      }
+      refreshIcons();
+    });
+
+    // ---------- Firestore Sync ----------
+    function txCollection() { return db.collection("users").doc(currentUser.uid).collection("transactions"); }
+    function savingsCollection() { return db.collection("users").doc(currentUser.uid).collection("savings"); }
+
+    function listenTransactions() {
+      unsubscribe = txCollection().onSnapshot((snap) => {
+        allTx = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        render();
+      }, (err) => console.error(err));
+    }
+
+    async function addTransaction(entry) { await txCollection().add(entry); }
+    async function deleteTransaction(id) { await txCollection().doc(id).delete(); }
+
+    function listenSavings() {
+      unsubscribeSavings = savingsCollection().onSnapshot((snap) => {
+        savingsGoals = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderSavings();
+      }, (err) => console.error(err));
+    }
+
+    async function addGoal(goal) { await savingsCollection().add(goal); }
+    async function deleteGoal(id) { await savingsCollection().doc(id).delete(); }
+    async function updateGoalAmount(id, newSaved) { await savingsCollection().doc(id).update({ saved: newSaved }); }
+
+    function walletsDoc() { return db.collection("users").doc(currentUser.uid).collection("wallets").doc("current"); }
+
+    function listenWallets() {
+      unsubscribeWallets = walletsDoc().onSnapshot((doc) => {
+        if (doc.exists) {
+          const data = doc.data();
+          wallets.card = Number(data.card) || 0;
+          wallets.cash = Number(data.cash) || 0;
+        } else {
+          wallets = { card: 0, cash: 0 };
+        }
+        renderWallets();
+      }, (err) => console.error(err));
+    }
+
+    async function updateWalletBalance(type, amount) {
+      await walletsDoc().set({ [type]: amount }, { merge: true });
+    }
+
+    // ---------- Navegación Temporal ----------
+    document.getElementById("btn-prev").addEventListener("click", () => changeMonth(-1));
+    document.getElementById("btn-next").addEventListener("click", () => changeMonth(1));
+
+    function changeMonth(delta) {
+      viewMonth += delta;
+      if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+      if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+      render();
+    }
+
+    // ---------- Pestañas (Segmented Control) ----------
+    const tabMov = document.getElementById("tab-mov");
+    const tabAhorros = document.getElementById("tab-ahorros");
+    const viewMovimientos = document.getElementById("view-movimientos");
+    const viewAhorros = document.getElementById("view-ahorros");
+    const btnAdd = document.getElementById("btn-add");
+
+    tabMov.addEventListener("click", () => switchTab("movimientos"));
+    tabAhorros.addEventListener("click", () => switchTab("ahorros"));
+
+    function switchTab(tab) {
+      const isMov = tab === "movimientos";
+      
+      // Estilos tab Movimientos
+      tabMov.className = isMov 
+        ? "flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 bg-white text-indigo-700 shadow-sm"
+        : "flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 text-slate-600 hover:text-slate-900";
+      
+      // Estilos tab Ahorros
+      tabAhorros.className = !isMov 
+        ? "flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 bg-white text-indigo-700 shadow-sm"
+        : "flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 text-slate-600 hover:text-slate-900";
+
+      viewMovimientos.classList.toggle("hidden", !isMov);
+      viewAhorros.classList.toggle("hidden", isMov);
+      btnAdd.classList.toggle("hidden", !isMov);
+      
+      refreshIcons();
+    }
+
+    // ---------- Modal: Nuevo Movimiento ----------
+    const modalBg = document.getElementById("modal-bg");
+    const form = document.getElementById("tx-form");
+    const catSelect = document.getElementById("f-category");
+    const btnSaveTx = document.getElementById("btn-save");
+    const typeEgresoBtn = document.getElementById("type-egreso");
+    const typeIngresoBtn = document.getElementById("type-ingreso");
+
+    btnAdd.addEventListener("click", () => {
+      form.reset();
+      document.getElementById("f-date").value = todayISO();
+      setFormType("egreso");
+      modalBg.classList.remove("hidden");
+      refreshIcons();
+    });
+
+    document.getElementById("btn-close-modal").addEventListener("click", () => modalBg.classList.add("hidden"));
+    modalBg.addEventListener("click", (e) => {
+      if (e.target === modalBg) modalBg.classList.add("hidden");
+    });
+
+    typeEgresoBtn.addEventListener("click", () => setFormType("egreso"));
+    typeIngresoBtn.addEventListener("click", () => setFormType("ingreso"));
+
+    function setFormType(tp) {
+      formType = tp;
+      if (tp === "egreso") {
+        typeEgresoBtn.className = "py-2 text-xs font-bold rounded-lg transition-all bg-rose-500 text-white shadow-sm";
+        typeIngresoBtn.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900";
+      } else {
+        typeIngresoBtn.className = "py-2 text-xs font-bold rounded-lg transition-all bg-emerald-500 text-white shadow-sm";
+        typeEgresoBtn.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900";
+      }
+      
+      const cats = formType === "ingreso" ? CATS_INGRESO : CATS_EGRESO;
+      catSelect.innerHTML = cats.map((c) => `<option value="${c}">${c}</option>`).join("");
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const amount = parseFloat(document.getElementById("f-amount").value);
+      if (!amount || amount <= 0) { 
+        Swal.fire({ icon: 'warning', text: 'Ingresa un monto mayor a cero.', confirmButtonColor: '#6366f1' });
+        return; 
+      }
+      
+      btnSaveTx.disabled = true;
+      btnSaveTx.innerHTML = `${spinnerSVG} Guardando...`;
+      
+      try {
+        await addTransaction({
+          type: formType,
+          amount,
+          category: catSelect.value,
+          description: document.getElementById("f-description").value.trim(),
+          date: document.getElementById("f-date").value,
+        });
+        modalBg.classList.add("hidden");
+        Swal.fire({ 
+          icon: 'success', 
+          title: 'Movimiento guardado', 
+          toast: true, 
+          position: 'top-end', 
+          showConfirmButton: false, 
+          timer: 2500 
+        });
+      } catch (err) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo guardar. Intenta de nuevo.', confirmButtonColor: '#f43f5e' });
+      } finally {
+        btnSaveTx.disabled = false;
+        btnSaveTx.innerHTML = `<span>Guardar movimiento</span>`;
+      }
+    });
+
+    // ---------- Modal: Metas de Ahorro ----------
+    const goalModalBg = document.getElementById("modal-goal-bg");
+    const goalForm = document.getElementById("goal-form");
+    const btnSaveGoal = document.getElementById("btn-save-goal");
+
+    document.getElementById("btn-new-goal").addEventListener("click", () => {
+      goalForm.reset();
+      goalModalBg.classList.remove("hidden");
+      refreshIcons();
+    });
+
+    document.getElementById("btn-close-goal-modal").addEventListener("click", () => goalModalBg.classList.add("hidden"));
+    goalModalBg.addEventListener("click", (e) => {
+      if (e.target === goalModalBg) goalModalBg.classList.add("hidden");
+    });
+
+    goalForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("g-name").value.trim();
+      const target = parseFloat(document.getElementById("g-target").value);
+      
+      if (!name) return;
+      if (!target || target <= 0) { 
+        Swal.fire({ icon: 'warning', text: 'La meta debe ser mayor a cero.', confirmButtonColor: '#6366f1' });
+        return; 
+      }
+      
+      btnSaveGoal.disabled = true; 
+      btnSaveGoal.innerHTML = `${spinnerSVG} Guardando...`;
+      
+      try {
+        await addGoal({ name, target, saved: 0 });
+        goalModalBg.classList.add("hidden");
+        Swal.fire({ icon: 'success', title: 'Meta creada', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+      } catch (err) {
+        Swal.fire({ icon: 'error', text: 'No se pudo guardar. Intenta de nuevo.', confirmButtonColor: '#f43f5e' });
+      } finally {
+        btnSaveGoal.disabled = false; 
+        btnSaveGoal.innerHTML = `<span>Crear meta</span>`;
+      }
+    });
+
+    // ---------- Modal: Mover Dinero (Ahorros) ----------
+    const depositModalBg = document.getElementById("modal-deposit-bg");
+    const depositForm = document.getElementById("deposit-form");
+    const btnSaveDeposit = document.getElementById("btn-save-deposit");
+    const depAbonarBtn = document.getElementById("dep-abonar");
+    const depRetirarBtn = document.getElementById("dep-retirar");
+
+    function openDepositModal(goal) {
+      depositGoalId = goal.id;
+      document.getElementById("deposit-title").textContent = `Mover dinero — ${goal.name}`;
+      depositForm.reset();
+      setDepositType("abonar");
+      depositModalBg.classList.remove("hidden");
+      refreshIcons();
+    }
+
+    document.getElementById("btn-close-deposit-modal").addEventListener("click", () => depositModalBg.classList.add("hidden"));
+    depositModalBg.addEventListener("click", (e) => {
+      if (e.target === depositModalBg) depositModalBg.classList.add("hidden");
+    });
+
+    depAbonarBtn.addEventListener("click", () => setDepositType("abonar"));
+    depRetirarBtn.addEventListener("click", () => setDepositType("retirar"));
+
+    function setDepositType(tp) {
+      depositType = tp;
+      if (tp === "abonar") {
+        depAbonarBtn.className = "py-2 text-xs font-bold rounded-lg transition-all bg-emerald-500 text-white shadow-sm";
+        depRetirarBtn.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900";
+      } else {
+        depRetirarBtn.className = "py-2 text-xs font-bold rounded-lg transition-all bg-rose-500 text-white shadow-sm";
+        depAbonarBtn.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900";
+      }
+    }
+
+    depositForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const amt = parseFloat(document.getElementById("dep-amount").value);
+      if (!amt || amt <= 0) { 
+        Swal.fire({ icon: 'warning', text: 'Anota un monto mayor a cero.', confirmButtonColor: '#6366f1' });
+        return; 
+      }
+      
+      const goal = savingsGoals.find((g) => g.id === depositGoalId);
+      if (!goal) return;
+      const newSaved = depositType === "abonar" ? goal.saved + amt : goal.saved - amt;
+      
+      if (newSaved < 0) { 
+        Swal.fire({ icon: 'error', text: 'No puedes retirar más dinero del que tienes acumulado.', confirmButtonColor: '#f43f5e' });
+        return; 
+      }
+      
+      btnSaveDeposit.disabled = true; 
+      btnSaveDeposit.innerHTML = `${spinnerSVG} Guardando...`;
+      try {
+        await updateGoalAmount(goal.id, newSaved);
+        depositModalBg.classList.add("hidden");
+        Swal.fire({ icon: 'success', title: 'Ahorro actualizado', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+      } catch (err) {
+        Swal.fire({ icon: 'error', text: 'No se pudo guardar. Intenta de nuevo.', confirmButtonColor: '#f43f5e' });
+      } finally {
+        btnSaveDeposit.disabled = false; 
+        btnSaveDeposit.innerHTML = `<span>Guardar</span>`;
+      }
+    });
+
+        // ---------- Modal: Ajustar Dinero (Tarjeta / Efectivo) ----------
+    const walletModalBg = document.getElementById("modal-wallet-bg");
+    const walletForm = document.getElementById("wallet-form");
+    const walletAmountInput = document.getElementById("wallet-amount");
+    const btnSaveWallet = document.getElementById("btn-save-wallet");
+    const walletTypeCardBtn = document.getElementById("wallet-type-card");
+    const walletTypeCashBtn = document.getElementById("wallet-type-cash");
+
+    function openWalletModal(type = "card") {
+      setWalletType(type);
+      walletAmountInput.value = (type === "card" ? wallets.card : wallets.cash) || "";
+      walletModalBg.classList.remove("hidden");
+      walletAmountInput.focus();
+      refreshIcons();
+    }
+
+    function setWalletType(tp) {
+      currentWalletType = tp;
+      if (tp === "card") {
+        walletTypeCardBtn.className = "py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-sm";
+        walletTypeCashBtn.className = "py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900";
+      } else {
+        walletTypeCashBtn.className = "py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 bg-emerald-500 text-white shadow-sm";
+        walletTypeCardBtn.className = "py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 text-slate-600 hover:text-slate-900";
+      }
+      walletAmountInput.value = (tp === "card" ? wallets.card : wallets.cash) || "";
+      refreshIcons();
+    }
+
+    document.getElementById("btn-edit-card").addEventListener("click", () => openWalletModal("card"));
+    document.getElementById("btn-edit-cash").addEventListener("click", () => openWalletModal("cash"));
+    document.getElementById("btn-quick-adjust-wallets").addEventListener("click", () => openWalletModal("card"));
+    document.getElementById("btn-close-wallet-modal").addEventListener("click", () => walletModalBg.classList.add("hidden"));
+    walletModalBg.addEventListener("click", (e) => {
+      if (e.target === walletModalBg) walletModalBg.classList.add("hidden");
+    });
+
+    walletTypeCardBtn.addEventListener("click", () => setWalletType("card"));
+    walletTypeCashBtn.addEventListener("click", () => setWalletType("cash"));
+
+    walletForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const amt = parseFloat(walletAmountInput.value);
+      if (isNaN(amt) || amt < 0) {
+        Swal.fire({ icon: 'warning', text: 'Ingresa un monto válido (0 o mayor).', confirmButtonColor: '#6366f1' });
+        return;
+      }
+
+      btnSaveWallet.disabled = true;
+      btnSaveWallet.innerHTML = `${spinnerSVG} Guardando...`;
+
+      try {
+        await updateWalletBalance(currentWalletType, amt);
+        walletModalBg.classList.add("hidden");
+        Swal.fire({
+          icon: 'success',
+          title: 'Saldo actualizado',
+          text: `Dinero en ${currentWalletType === 'card' ? 'tarjeta' : 'efectivo'}: ${money(amt)}`,
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2500
+        });
+      } catch (err) {
+        Swal.fire({ icon: 'error', text: 'No se pudo guardar el saldo. Intenta de nuevo.', confirmButtonColor: '#f43f5e' });
+      } finally {
+        btnSaveWallet.disabled = false;
+        btnSaveWallet.innerHTML = `<span>Guardar saldo</span>`;
+      }
+    });
+
+    function renderWallets() {
+      const cardEl = document.getElementById("wallet-card-value");
+      const cashEl = document.getElementById("wallet-cash-value");
+      const badgeEl = document.getElementById("total-disponible-badge");
+      if (cardEl) cardEl.textContent = money(wallets.card);
+      if (cashEl) cashEl.textContent = money(wallets.cash);
+      if (badgeEl) badgeEl.textContent = `Total: ${money(wallets.card + wallets.cash)}`;
+      refreshIcons();
+    }
+
+// ---------- Renders y Visualización ----------
+    function monthKeyOf(y, m) { return `${y}-${String(m + 1).padStart(2, "0")}`; }
+
+    function render() {
+      document.getElementById("month-label").textContent = `${MESES[viewMonth]} ${viewYear}`;
+      const key = monthKeyOf(viewYear, viewMonth);
+      const monthTx = allTx.filter((t) => t.date && t.date.slice(0, 7) === key).sort((a, b) => a.date.localeCompare(b.date));
+
+      const totalIngreso = monthTx.filter((t) => t.type === "ingreso").reduce((s, t) => s + t.amount, 0);
+      const totalEgreso = monthTx.filter((t) => t.type === "egreso").reduce((s, t) => s + t.amount, 0);
+      const balance = totalIngreso - totalEgreso;
+
+      const balanceEl = document.getElementById("balance-value");
+      balanceEl.textContent = money(balance);
+      
+      // Color dinámico del balance
+      if (balance >= 0) {
+        balanceEl.className = "text-3xl sm:text-5xl font-extrabold tracking-tight font-mono text-emerald-400 mt-1";
+      } else {
+        balanceEl.className = "text-3xl sm:text-5xl font-extrabold tracking-tight font-mono text-rose-400 mt-1";
+      }
+
+      document.getElementById("total-ingreso").textContent = money(totalIngreso);
+      document.getElementById("total-egreso").textContent = money(totalEgreso);
+
+      const ingresoTx = monthTx.filter((t) => t.type === "ingreso").slice().sort((a, b) => b.date.localeCompare(a.date));
+      const egresoTx = monthTx.filter((t) => t.type === "egreso").slice().sort((a, b) => b.date.localeCompare(a.date));
+      
+      renderTxList(ingresoTx, "ingreso-list", "ingreso-empty", "Aún no hay ingresos este mes.");
+      renderTxList(egresoTx, "egreso-list", "egreso-empty", "Aún no hay gastos este mes.");
+
+      renderCategoryChart(monthTx);
+      renderTrendChart();
+      renderWallets();
+      refreshIcons();
+    }
+
+    function renderTxList(list, listId, emptyId, emptyMsg) {
+      const listEl = document.getElementById(listId);
+      const emptyEl = document.getElementById(emptyId);
+      
+      if (list.length === 0) {
+        listEl.innerHTML = "";
+        emptyEl.classList.remove("hidden");
+      } else {
+        emptyEl.classList.add("hidden");
+        listEl.innerHTML = list.map((t) => {
+          const isIngreso = t.type === "ingreso";
+          const catMeta = CATEGORY_PALETTE[t.category] || CATEGORY_PALETTE["Otro"];
+          const iconName = catMeta.icon;
+          const badgeClass = catMeta.bg;
+          
+          const day = t.date.slice(8, 10);
+          const monthIdx = parseInt(t.date.slice(5, 7), 10) - 1;
+          const dateLabel = `${day} ${MESES_CORTO[monthIdx] || ''}`;
+
+          return `
+            <div class="group bg-white hover:bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 flex items-center justify-between transition-all duration-150 shadow-sm">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${badgeClass}">
+                  <i data-lucide="${iconName}" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                  <div class="text-sm font-bold text-slate-800 truncate">${escapeHtml(t.description || t.category)}</div>
+                  <div class="flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium">
+                    <span class="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium text-[11px]">${escapeHtml(t.category)}</span>
+                    <span>•</span>
+                    <span class="font-mono text-slate-400 text-[11px]">${dateLabel}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 pl-3 flex-shrink-0">
+                <span class="font-mono font-bold text-sm sm:text-base ${isIngreso ? 'text-emerald-600' : 'text-slate-800'}">
+                  ${isIngreso ? '+' : '−'}${money(t.amount)}
+                </span>
+                <button 
+                  class="tx-del p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors opacity-80 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100" 
+                  data-id="${t.id}" 
+                  title="Eliminar movimiento">
+                  <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join("");
+        
+        listEl.querySelectorAll(".tx-del").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            Swal.fire({
+              title: '¿Borrar movimiento?',
+              text: "Esta acción no se puede deshacer.",
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#f43f5e',
+              cancelButtonColor: '#94a3b8',
+              confirmButtonText: 'Sí, borrar',
+              cancelButtonText: 'Cancelar'
+            }).then((result) => {
+              if (result.isConfirmed) {
+                deleteTransaction(btn.dataset.id);
+                Swal.fire({ icon: 'success', title: 'Borrado', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+              }
+            });
+          });
+        });
+      }
+    }
+
+    function renderSavings() {
+      const listEl = document.getElementById("goals-list");
+      const emptyEl = document.getElementById("goals-empty");
+      
+      if (savingsGoals.length === 0) {
+        listEl.innerHTML = "";
+        emptyEl.classList.remove("hidden");
+        return;
+      }
+      
+      emptyEl.classList.add("hidden");
+      listEl.innerHTML = savingsGoals.map((g) => {
+        const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
+        const isComplete = pct >= 100;
+
+        return `
+          <div class="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-sm flex flex-col justify-between space-y-4">
+            <div>
+              <div class="flex items-start justify-between gap-3 mb-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-9 h-9 rounded-xl ${isComplete ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'} flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="${isComplete ? 'check-circle' : 'target'}" class="w-5 h-5"></i>
+                  </div>
+                  <h4 class="font-bold text-slate-900 text-sm sm:text-base truncate">${escapeHtml(g.name)}</h4>
+                </div>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                  <button 
+                    class="goal-del p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors" 
+                    data-del="${g.id}" 
+                    title="Eliminar meta">
+                    <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Montos y Progreso -->
+              <div class="flex items-baseline justify-between text-xs mt-3 mb-1.5">
+                <div class="font-mono text-slate-600">
+                  <span class="font-bold text-slate-900 text-sm">${money(g.saved)}</span> de ${money(g.target)}
+                </div>
+                <span class="font-bold font-mono px-2 py-0.5 rounded-full text-xs ${isComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}">
+                  ${pct}%
+                </span>
+              </div>
+
+              <!-- Barra de Progreso -->
+              <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div 
+                  class="h-full rounded-full transition-all duration-500 ${isComplete ? 'bg-emerald-500' : 'bg-gradient-to-r from-indigo-500 to-indigo-600'}" 
+                  style="width: ${pct}%">
+                </div>
+              </div>
+            </div>
+
+            <!-- Botón de Acción -->
+            <div class="pt-1">
+              <button 
+                class="w-full py-2 px-3 text-xs font-bold rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200/60 transition-colors flex items-center justify-center gap-1.5" 
+                data-dep="${g.id}">
+                <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+                <span>Abonar o Retirar</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+      
+      listEl.querySelectorAll("[data-dep]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const goal = savingsGoals.find((g) => g.id === btn.dataset.dep);
+          if (goal) openDepositModal(goal);
+        });
+      });
+
+      listEl.querySelectorAll("[data-del]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          Swal.fire({
+            title: '¿Borrar meta?',
+            text: "El progreso acumulado se eliminará de tus metas.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#f43f5e',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'Sí, borrar',
+            cancelButtonText: 'Cancelar'
+          }).then((result) => {
+            if (result.isConfirmed) deleteGoal(btn.dataset.del);
+          });
+        });
+      });
+
+      refreshIcons();
+    }
+
+    // ---------- Gráficas con Chart.js ----------
+    function renderCategoryChart(monthTx) {
+      const map = {};
+      monthTx.filter((t) => t.type === "egreso").forEach((t) => {
+        map[t.category] = (map[t.category] || 0) + t.amount;
+      });
+      const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+      const canvas = document.getElementById("chart-cat");
+      const emptyEl = document.getElementById("cat-empty");
+
+      if (chartCat) chartCat.destroy();
+      
+      if (entries.length === 0) {
+        canvas.classList.add("hidden");
+        emptyEl.classList.remove("hidden");
+        return;
+      }
+      
+      canvas.classList.remove("hidden");
+      emptyEl.classList.add("hidden");
+
+      const colors = entries.map((e) => (CATEGORY_PALETTE[e[0]] || CATEGORY_PALETTE["Otro"]).color);
+
+      chartCat = new Chart(canvas, {
+        type: "doughnut",
+        data: {
+          labels: entries.map((e) => e[0]),
+          datasets: [{
+            data: entries.map((e) => e[1]),
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: "#ffffff",
+            hoverOffset: 4
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: {
+            legend: {
+              position: "right",
+              labels: {
+                boxWidth: 10,
+                boxHeight: 10,
+                usePointStyle: true,
+                pointStyle: 'circle',
+                font: { size: 11, family: "'Plus Jakarta Sans', sans-serif", weight: 600 },
+                color: '#475569',
+                padding: 12
+              }
+            },
+            tooltip: {
+              backgroundColor: '#0f172a',
+              titleFont: { size: 12, family: "'Plus Jakarta Sans', sans-serif" },
+              bodyFont: { size: 12, family: "'JetBrains Mono', monospace" },
+              padding: 10,
+              cornerRadius: 10,
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ${money(ctx.parsed)}`
+              }
+            }
+          },
+        },
+      });
+    }
+
+    function renderTrendChart() {
+      const labels = [];
+      const ingresos = [];
+      const egresos = [];
+      for (let i = 5; i >= 0; i--) {
+        let m = viewMonth - i, y = viewYear;
+        while (m < 0) { m += 12; y--; }
+        const key = monthKeyOf(y, m);
+        labels.push(MESES_CORTO[m]);
+        ingresos.push(allTx.filter((t) => t.date.slice(0, 7) === key && t.type === "ingreso").reduce((s, t) => s + t.amount, 0));
+        egresos.push(allTx.filter((t) => t.date.slice(0, 7) === key && t.type === "egreso").reduce((s, t) => s + t.amount, 0));
+      }
+      
+      const canvas = document.getElementById("chart-trend");
+      if (chartTrend) chartTrend.destroy();
+      
+      chartTrend = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Ingresos",
+              data: ingresos,
+              backgroundColor: "#10b981",
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+            {
+              label: "Gastos",
+              data: egresos,
+              backgroundColor: "#f43f5e",
+              borderRadius: 6,
+              borderSkipped: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              align: 'end',
+              labels: {
+                boxWidth: 8,
+                boxHeight: 8,
+                usePointStyle: true,
+                pointStyle: 'circle',
+                font: { size: 11, family: "'Plus Jakarta Sans', sans-serif", weight: 600 },
+                color: '#64748b'
+              }
+            },
+            tooltip: {
+              backgroundColor: '#0f172a',
+              titleFont: { size: 12, family: "'Plus Jakarta Sans', sans-serif" },
+              bodyFont: { size: 12, family: "'JetBrains Mono', monospace" },
+              padding: 10,
+              cornerRadius: 10,
+              callbacks: {
+                label: (ctx) => ` ${ctx.dataset.label}: ${money(ctx.parsed.y)}`
+              }
+            }
+          },
+          scales: {
+            y: {
+              display: false,
+              grid: { display: false }
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { size: 11, family: "'Plus Jakarta Sans', sans-serif", weight: 600 },
+                color: '#94a3b8'
+              }
+            }
+          },
+        },
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Ejecutar inicialización de iconos al cargar el documento
+    document.addEventListener("DOMContentLoaded", () => {
+      refreshIcons();
+    });
+  </script>
+</body>
+</html>
