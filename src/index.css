@@ -6,8 +6,6 @@
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    background-color: #0b0f19;
-    color: #f8fafc;
   }
 }
 
@@ -48,20 +46,24 @@
   background: #475569;
 }
 
-/* Personalización de SweetAlert2 para tema oscuro */
+/* Personalización de SweetAlert2 */
 .swal2-popup {
   font-family: 'Plus Jakarta Sans', sans-serif !important;
+  border-radius: 1.25rem !important;
+  padding: 1.75rem !important;
+}
+.dark .swal2-popup {
   background: #0f172a !important;
   color: #f8fafc !important;
   border: 1px solid #1e293b !important;
-  border-radius: 1.25rem !important;
-  padding: 1.75rem !important;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
 }
 .swal2-title {
   font-weight: 700 !important;
-  color: #ffffff !important;
   font-size: 1.25rem !important;
+}
+.dark .swal2-title {
+  color: #ffffff !important;
 }
 .swal2-html-container {
   color: #94a3b8 !important;
