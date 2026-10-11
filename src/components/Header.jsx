@@ -2,7 +2,7 @@ import React from 'react';
 import { Wallet, LogOut, Sun, Moon } from 'lucide-react';
 import Swal from 'sweetalert2';
 
-export default function Header({ onLogout, theme, onToggleTheme }) {
+export default function Header({ onLogout, theme, onToggleTheme, userEmail }) {
   const isDark = theme === 'dark';
 
   const handleLogout = () => {
@@ -36,6 +36,11 @@ export default function Header({ onLogout, theme, onToggleTheme }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {userEmail && (
+            <span className="hidden md:inline-block text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 truncate max-w-[170px]" title={userEmail}>
+              {userEmail}
+            </span>
+          )}
           {/* Botón selector de Modo Oscuro / Modo Claro */}
           <button
             onClick={onToggleTheme}

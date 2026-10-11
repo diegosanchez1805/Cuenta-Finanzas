@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowDownLeft, ArrowUpRight, TrendingUp, TrendingDown } from 'lucide-react';
 import { MESES, money } from '../utils/formatters';
 
 export default function BalanceHero({
@@ -10,6 +10,11 @@ export default function BalanceHero({
   totalEgreso,
 }) {
   const balance = totalIngreso - totalEgreso;
+  const hasTransactions = totalIngreso > 0 || totalEgreso > 0;
+  const savingsRate =
+    totalIngreso > 0
+      ? Math.round(((totalIngreso - totalEgreso) / totalIngreso) * 100)
+      : 0;
 
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-white via-slate-50/80 to-indigo-50/40 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950/70 rounded-3xl p-6 sm:p-8 text-slate-900 dark:text-white shadow-lg shadow-slate-200/50 dark:shadow-2xl dark:shadow-black/40 border border-slate-200/80 dark:border-slate-800/90 mb-6 transition-colors duration-200">
@@ -53,6 +58,27 @@ export default function BalanceHero({
           >
             {money(balance)}
           </div>
+
+          {/* Badge de Tasa de Ahorro / Rendimiento del mes */}
+          {hasTransactions && (
+            <div className="mt-3 flex items-center gap-2">
+              {totalIngreso > 0 && savingsRate >= 0 ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>Ahorraste el {savingsRate}% de tus ingresos</span>
+                </span>
+              ) : totalIngreso > 0 && savingsRate < 0 ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 shadow-sm">
+                  <TrendingDown className="w-3.5 h-3.5" />
+                  <span>Gastos superan ingresos en {Math.abs(savingsRate)}%</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700/60">
+                  <span>Solo gastos registrados</span>
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Lado Derecho: Tarjetas resumen de Ingresos y Gastos */}

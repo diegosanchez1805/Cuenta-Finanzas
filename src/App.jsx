@@ -61,7 +61,42 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
     localStorage.setItem('theme', theme);
+
+    // Sincronizar color de la barra del navegador móvil
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement('meta');
+      metaThemeColor.name = 'theme-color';
+      document.head.appendChild(metaThemeColor);
+    }
+    metaThemeColor.setAttribute('content', theme === 'dark' ? '#0b0f19' : '#f8fafc');
   }, [theme]);
+
+  // Atajos de teclado: 'N' para nuevo movimiento, 'Escape' para cerrar modales
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsTxModalOpen(false);
+        setIsWalletModalOpen(false);
+        setIsGoalModalOpen(false);
+        setIsDepositModalOpen(false);
+        return;
+      }
+
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
+        return;
+      }
+
+      if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setIsTxModalOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleToggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
@@ -219,6 +254,7 @@ export default function App() {
         onLogout={() => signOut(auth)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        userEmail={currentUser.email}
       />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
@@ -295,15 +331,20 @@ export default function App() {
         )}
       </main>
 
-      {/* Botón Flotante (FAB) para nuevo movimiento */}
+      {/* Botón Flotante (FAB) para nuevo movimiento con indicador de atajo 'N' */}
       {activeTab === 'movimientos' && (
         <button
           onClick={() => setIsTxModalOpen(true)}
           type="button"
-          className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-2xl shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40 ring-1 ring-white/20"
-          aria-label="Registrar nuevo movimiento"
+          className="fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center gap-2.5 shadow-2xl shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40 ring-1 ring-white/20"
+          aria-label="Registrar nuevo movimiento (tecla N)"
+          title="Nuevo movimiento (Atajo: tecla 'N')"
         >
-          <Plus className="w-7 h-7 stroke-[2.5]" />
+          <Plus className="w-6 h-6 stroke-[2.5]" />
+          <span className="text-xs font-bold tracking-wide hidden sm:inline-block">Nuevo</span>
+          <span className="hidden sm:inline-block text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white/20 text-white leading-none">
+            N
+          </span>
         </button>
       )}
 
@@ -312,6 +353,8 @@ export default function App() {
         isOpen={isTxModalOpen}
         onClose={() => setIsTxModalOpen(false)}
         onSave={handleAddTransaction}
+        defaultYear={viewYear}
+        defaultMonth={viewMonth}
       />
 
       <WalletModal

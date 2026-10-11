@@ -10,6 +10,14 @@ export default function SavingsSection({
   onDeleteGoal,
   isDark,
 }) {
+  const totalSaved = savingsGoals.reduce((sum, g) => sum + (g.saved || 0), 0);
+  const totalTarget = savingsGoals.reduce((sum, g) => sum + (g.target || 0), 0);
+  const completedGoals = savingsGoals.filter(
+    (g) => g.target > 0 && (g.saved || 0) >= g.target
+  ).length;
+  const globalPct =
+    totalTarget > 0 ? Math.min(100, Math.round((totalSaved / totalTarget) * 100)) : 0;
+
   const handleDelete = (goal) => {
     Swal.fire({
       title: '¿Borrar meta?',
@@ -48,6 +56,44 @@ export default function SavingsSection({
           <span>Nueva meta</span>
         </button>
       </div>
+
+      {/* Tarjeta de Resumen Global de Ahorro */}
+      {savingsGoals.length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-50/60 via-white to-purple-50/40 dark:from-slate-900/90 dark:via-slate-900/60 dark:to-indigo-950/40 p-5 rounded-3xl border border-indigo-100 dark:border-indigo-500/20 shadow-sm backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                Progreso general del ahorro
+              </span>
+              <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums mt-0.5">
+                {money(totalSaved)}{' '}
+                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  de {money(totalTarget)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30">
+                {globalPct}% acumulado
+              </span>
+              {completedGoals > 0 && (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>{completedGoals} de {savingsGoals.length} cumplidas</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-all duration-700 shadow-sm"
+              style={{ width: `${globalPct}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {savingsGoals.length === 0 ? (
         <div className="bg-white dark:bg-slate-900/70 rounded-3xl p-10 text-center border border-slate-200/80 dark:border-slate-800 shadow-sm dark:shadow-xl max-w-md mx-auto backdrop-blur-md transition-colors">

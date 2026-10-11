@@ -3,7 +3,13 @@ import { PlusCircle, X, Loader2 } from 'lucide-react';
 import { CATS_INGRESO, CATS_EGRESO, todayISO } from '../utils/formatters';
 import Swal from 'sweetalert2';
 
-export default function TransactionModal({ isOpen, onClose, onSave }) {
+export default function TransactionModal({
+  isOpen,
+  onClose,
+  onSave,
+  defaultYear,
+  defaultMonth,
+}) {
   const [type, setType] = useState('egreso');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(CATS_EGRESO[0]);
@@ -17,10 +23,20 @@ export default function TransactionModal({ isOpen, onClose, onSave }) {
       setAmount('');
       setCategory(CATS_EGRESO[0]);
       setDescription('');
-      setDate(todayISO());
+
+      const now = new Date();
+      const isCurrentMonth =
+        defaultYear === now.getFullYear() && defaultMonth === now.getMonth();
+
+      if (isCurrentMonth || defaultYear === undefined || defaultMonth === undefined) {
+        setDate(todayISO());
+      } else {
+        const mStr = String(defaultMonth + 1).padStart(2, '0');
+        setDate(`${defaultYear}-${mStr}-01`);
+      }
       setSaving(false);
     }
-  }, [isOpen]);
+  }, [isOpen, defaultYear, defaultMonth]);
 
   const handleTypeChange = (newType) => {
     setType(newType);
