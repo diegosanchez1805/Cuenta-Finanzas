@@ -10,28 +10,60 @@ import {
   addDoc,
   deleteDoc,
   updateDoc,
-  setDoc
+  setDoc,
+  writeBatch,
+  increment
 } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
-import { monthKeyOf } from './utils/formatters';
+import { sumBy, txOfMonth, prevMonthOf } from './utils/formatters';
 
 // Componentes
 import Header from './components/Header';
+import BottomNav from './components/BottomNav';
+import MonthSwitcher from './components/MonthSwitcher';
 import AuthScreen from './components/AuthScreen';
 import BalanceHero from './components/BalanceHero';
 import WalletsSection from './components/WalletsSection';
+import InsightsSection from './components/InsightsSection';
 import ChartsSection from './components/ChartsSection';
-import TransactionList from './components/TransactionList';
+import TransactionList, { RecentTransactions } from './components/TransactionList';
+import BudgetsSection, { BudgetAlerts } from './components/BudgetsSection';
 import SavingsSection from './components/SavingsSection';
+import Logo from './components/Logo';
 
 // Modales
 import TransactionModal from './modals/TransactionModal';
 import WalletModal from './modals/WalletModal';
 import GoalModal from './modals/GoalModal';
 import DepositModal from './modals/DepositModal';
+import BudgetModal from './modals/BudgetModal';
 
 // Iconos
-import { ReceiptText, PiggyBank, Plus } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Gauge, PiggyBank, Plus } from 'lucide-react';
+
+const TABS = [
+  { id: 'resumen', label: 'Resumen', icon: LayoutDashboard },
+  { id: 'movimientos', label: 'Movimientos', icon: ReceiptText },
+  { id: 'presupuestos', label: 'Presupuestos', icon: Gauge },
+  { id: 'ahorros', label: 'Metas', icon: PiggyBank },
+];
+
+// Efecto de un movimiento sobre los saldos: { card: +x } / { cash: -y }
+function walletEffect(tx, sign = 1) {
+  if (!tx || !tx.affectsWallet || !tx.method) return {};
+  const delta = (tx.type === 'ingreso' ? tx.amount : -tx.amount) * sign;
+  return { [tx.method]: delta };
+}
+
+function mergeEffects(...effects) {
+  const out = {};
+  effects.forEach((e) => {
+    Object.entries(e).forEach(([k, v]) => {
+      out[k] = (out[k] || 0) + v;
+    });
+  });
+  return out;
+}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -41,11 +73,12 @@ export default function App() {
   const [allTx, setAllTx] = useState([]);
   const [savingsGoals, setSavingsGoals] = useState([]);
   const [wallets, setWallets] = useState({ card: 0, cash: 0 });
+  const [budgets, setBudgets] = useState({});
 
   // Navegación temporal y pestañas
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
-  const [activeTab, setActiveTab] = useState('movimientos'); // 'movimientos' | 'ahorros'
+  const [activeTab, setActiveTab] = useState('resumen');
 
   // Tema: 'dark' | 'light' (por defecto 'dark', persistido en localStorage)
   const [theme, setTheme] = useState(() => {
@@ -53,6 +86,17 @@ export default function App() {
   });
 
   const isDark = theme === 'dark';
+
+  // Estados de modales
+  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
+  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+  const [walletModalType, setWalletModalType] = useState('card');
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState(null);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [budgetCategory, setBudgetCategory] = useState(null);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -69,8 +113,13 @@ export default function App() {
       metaThemeColor.name = 'theme-color';
       document.head.appendChild(metaThemeColor);
     }
-    metaThemeColor.setAttribute('content', theme === 'dark' ? '#0b0f19' : '#f8fafc');
+    metaThemeColor.setAttribute('content', theme === 'dark' ? '#0b0f19' : '#f5f6fa');
   }, [theme]);
+
+  const openNewTx = () => {
+    setEditingTx(null);
+    setIsTxModalOpen(true);
+  };
 
   // Atajos de teclado: 'N' para nuevo movimiento, 'Escape' para cerrar modales
   useEffect(() => {
@@ -80,6 +129,7 @@ export default function App() {
         setIsWalletModalOpen(false);
         setIsGoalModalOpen(false);
         setIsDepositModalOpen(false);
+        setIsBudgetModalOpen(false);
         return;
       }
 
@@ -90,7 +140,7 @@ export default function App() {
 
       if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        setIsTxModalOpen(true);
+        openNewTx();
       }
     };
 
@@ -101,14 +151,6 @@ export default function App() {
   const handleToggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
-
-  // Estados de modales
-  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
-  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
-  const [walletModalType, setWalletModalType] = useState('card');
-  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
-  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState(null);
 
   // Escuchar estado de autenticación
   useEffect(() => {
@@ -125,6 +167,7 @@ export default function App() {
       setAllTx([]);
       setSavingsGoals([]);
       setWallets({ card: 0, cash: 0 });
+      setBudgets({});
       return;
     }
 
@@ -156,10 +199,19 @@ export default function App() {
       }
     });
 
+    // 4. Presupuestos por categoría
+    const budgetsDocRef = doc(db, 'users', currentUser.uid, 'settings', 'budgets');
+    const unsubscribeBudgets = onSnapshot(
+      budgetsDocRef,
+      (docSnap) => setBudgets(docSnap.exists() ? docSnap.data().limits || {} : {}),
+      () => setBudgets({})
+    );
+
     return () => {
       unsubscribeTx();
       unsubscribeSavings();
       unsubscribeWallets();
+      unsubscribeBudgets();
     };
   }, [currentUser]);
 
@@ -178,23 +230,68 @@ export default function App() {
     setViewYear(newY);
   };
 
-  // Operaciones de Firestore
-  const handleAddTransaction = async (entry) => {
-    if (!currentUser) return;
-    const colRef = collection(db, 'users', currentUser.uid, 'transactions');
-    await addDoc(colRef, entry);
+  const handleGoToToday = () => {
+    const now = new Date();
+    setViewYear(now.getFullYear());
+    setViewMonth(now.getMonth());
   };
 
-  const handleDeleteTransaction = async (id) => {
+  // Operaciones de Firestore
+  const walletRef = () => doc(db, 'users', currentUser.uid, 'wallets', 'current');
+
+  // Aplica el cambio de saldo dentro del mismo lote para que sea atómico
+  const addWalletEffect = (batch, effect) => {
+    const update = {};
+    Object.entries(effect).forEach(([k, v]) => {
+      if (v) update[k] = increment(v);
+    });
+    if (Object.keys(update).length) batch.set(walletRef(), update, { merge: true });
+  };
+
+  const handleSaveTransaction = async (entry) => {
     if (!currentUser) return;
-    const docRef = doc(db, 'users', currentUser.uid, 'transactions', id);
-    await deleteDoc(docRef);
+    const batch = writeBatch(db);
+    if (editingTx) {
+      const ref = doc(db, 'users', currentUser.uid, 'transactions', editingTx.id);
+      batch.update(ref, entry);
+      addWalletEffect(batch, mergeEffects(walletEffect(editingTx, -1), walletEffect(entry)));
+    } else {
+      const ref = doc(collection(db, 'users', currentUser.uid, 'transactions'));
+      batch.set(ref, { ...entry, createdAt: Date.now() });
+      addWalletEffect(batch, walletEffect(entry));
+    }
+    await batch.commit();
+  };
+
+  const handleDeleteTransaction = async (tx) => {
+    if (!currentUser) return;
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'users', currentUser.uid, 'transactions', tx.id));
+    addWalletEffect(batch, walletEffect(tx, -1));
+    await batch.commit();
+  };
+
+  const handleEditTransaction = (tx) => {
+    setEditingTx(tx);
+    setIsTxModalOpen(true);
   };
 
   const handleSaveWallet = async (type, amount) => {
     if (!currentUser) return;
-    const docRef = doc(db, 'users', currentUser.uid, 'wallets', 'current');
-    await setDoc(docRef, { [type]: amount }, { merge: true });
+    await setDoc(walletRef(), { [type]: amount }, { merge: true });
+  };
+
+  const handleSaveBudget = async (category, amount) => {
+    if (!currentUser) return;
+    const next = { ...budgets };
+    if (amount > 0) next[category] = amount;
+    else delete next[category];
+    await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'budgets'), { limits: next });
+  };
+
+  const handleOpenBudgetModal = (category) => {
+    setBudgetCategory(category);
+    setIsBudgetModalOpen(true);
   };
 
   const handleAddGoal = async (goal) => {
@@ -225,20 +322,19 @@ export default function App() {
     setIsWalletModalOpen(true);
   };
 
-  // Cálculos reactivos para el mes seleccionado
-  const currentMonthKey = monthKeyOf(viewYear, viewMonth);
-  const monthTx = allTx.filter((t) => t.date && t.date.slice(0, 7) === currentMonthKey);
-  const totalIngreso = monthTx
-    .filter((t) => t.type === 'ingreso')
-    .reduce((s, t) => s + (t.amount || 0), 0);
-  const totalEgreso = monthTx
-    .filter((t) => t.type === 'egreso')
-    .reduce((s, t) => s + (t.amount || 0), 0);
+  // Cálculos reactivos para el mes seleccionado y el anterior
+  const monthTx = txOfMonth(allTx, viewYear, viewMonth);
+  const totalIngreso = sumBy(monthTx, 'ingreso');
+  const totalEgreso = sumBy(monthTx, 'egreso');
+  const prevTx = txOfMonth(allTx, ...prevMonthOf(viewYear, viewMonth));
+  const prevIngreso = sumBy(prevTx, 'ingreso');
+  const prevEgreso = sumBy(prevTx, 'egreso');
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0b0f19]">
-        <div className="w-9 h-9 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#f5f6fa] dark:bg-[#0b0f19]">
+        <Logo className="w-12 h-12 animate-pulse" />
+        <div className="w-6 h-6 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -247,76 +343,100 @@ export default function App() {
     return <AuthScreen theme={theme} onToggleTheme={handleToggleTheme} />;
   }
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+  })();
+  const userName = (currentUser.displayName || currentUser.email || '').split('@')[0];
+  const showMonth = activeTab !== 'ahorros';
+  const activeLabel = TABS.find((t) => t.id === activeTab)?.label;
+
   return (
-    <div className="min-h-screen pb-28 bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white transition-colors duration-150">
-      {/* Header global con selector de Modo Oscuro / Claro y Logout */}
+    <div className="min-h-screen pb-28 md:pb-16 bg-[#f5f6fa] dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white transition-colors duration-150">
       <Header
         onLogout={() => signOut(auth)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
         userEmail={currentUser.email}
+        tabs={TABS}
+        activeTab={activeTab}
+        onChangeTab={setActiveTab}
       />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-6">
-        {/* Balance Hero con selector de meses */}
-        <BalanceHero
-          viewYear={viewYear}
-          viewMonth={viewMonth}
-          onChangeMonth={handleChangeMonth}
-          totalIngreso={totalIngreso}
-          totalEgreso={totalEgreso}
-        />
-
-        {/* Sección de Tarjeta y Efectivo */}
-        <WalletsSection
-          wallets={wallets}
-          onOpenWalletModal={handleOpenWalletModal}
-        />
-
-        {/* Pestañas: Segmented Control adaptativo para Modo Claro y Oscuro */}
-        <div className="flex p-1 bg-slate-200/80 dark:bg-slate-900 border border-slate-300/70 dark:border-slate-800 rounded-2xl mb-6 max-w-sm shadow-sm dark:shadow-md transition-colors">
-          <button
-            onClick={() => setActiveTab('movimientos')}
-            type="button"
-            className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
-              activeTab === 'movimientos'
-                ? 'bg-white text-indigo-700 dark:bg-slate-800 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/70'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <ReceiptText className={`w-4 h-4 ${activeTab === 'movimientos' ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
-            <span>Movimientos</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('ahorros')}
-            type="button"
-            className={`flex-1 py-2.5 px-4 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 ${
-              activeTab === 'ahorros'
-                ? 'bg-white text-indigo-700 dark:bg-slate-800 dark:text-white shadow-sm border border-slate-200/80 dark:border-slate-700/70'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <PiggyBank className={`w-4 h-4 ${activeTab === 'ahorros' ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
-            <span>Metas de Ahorro</span>
-          </button>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+        {/* Encabezado de página con selector de mes */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
+          <div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {activeTab === 'resumen' ? `${greeting}, ${userName}` : 'Finanzas'}
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+              {activeTab === 'resumen' ? 'Tu resumen' : activeLabel}
+            </h1>
+          </div>
+          {showMonth && (
+            <MonthSwitcher
+              viewYear={viewYear}
+              viewMonth={viewMonth}
+              onChangeMonth={handleChangeMonth}
+              onToday={handleGoToToday}
+            />
+          )}
         </div>
+
+        {/* Vista: Resumen */}
+        {activeTab === 'resumen' && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-2">
+                <BalanceHero
+                  viewMonth={viewMonth}
+                  totalIngreso={totalIngreso}
+                  totalEgreso={totalEgreso}
+                  prevIngreso={prevIngreso}
+                  prevEgreso={prevEgreso}
+                />
+              </div>
+              <WalletsSection wallets={wallets} onOpenWalletModal={handleOpenWalletModal} />
+            </div>
+
+            <BudgetAlerts budgets={budgets} monthTx={monthTx} onOpen={() => setActiveTab('presupuestos')} />
+
+            <InsightsSection monthTx={monthTx} viewYear={viewYear} viewMonth={viewMonth} prevEgreso={prevEgreso} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+              <div className="lg:col-span-3">
+                <ChartsSection monthTx={monthTx} allTx={allTx} viewYear={viewYear} viewMonth={viewMonth} isDark={isDark} />
+              </div>
+              <div className="lg:col-span-2">
+                <RecentTransactions
+                  monthTx={monthTx}
+                  onEdit={handleEditTransaction}
+                  onSeeAll={() => setActiveTab('movimientos')}
+                  onAdd={openNewTx}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Vista: Movimientos */}
         {activeTab === 'movimientos' && (
-          <div className="space-y-6">
-            <ChartsSection
-              monthTx={monthTx}
-              allTx={allTx}
-              viewYear={viewYear}
-              viewMonth={viewMonth}
-              isDark={isDark}
-            />
+          <div className="max-w-3xl">
             <TransactionList
               monthTx={monthTx}
+              viewYear={viewYear}
+              viewMonth={viewMonth}
+              onEditTransaction={handleEditTransaction}
               onDeleteTransaction={handleDeleteTransaction}
               isDark={isDark}
             />
           </div>
+        )}
+
+        {/* Vista: Presupuestos */}
+        {activeTab === 'presupuestos' && (
+          <BudgetsSection budgets={budgets} monthTx={monthTx} onEditBudget={handleOpenBudgetModal} />
         )}
 
         {/* Vista: Metas de Ahorro */}
@@ -331,28 +451,30 @@ export default function App() {
         )}
       </main>
 
-      {/* Botón Flotante (FAB) para nuevo movimiento con indicador de atajo 'N' */}
-      {activeTab === 'movimientos' && (
-        <button
-          onClick={() => setIsTxModalOpen(true)}
-          type="button"
-          className="fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center gap-2.5 shadow-2xl shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40 ring-1 ring-white/20"
-          aria-label="Registrar nuevo movimiento (tecla N)"
-          title="Nuevo movimiento (Atajo: tecla 'N')"
-        >
-          <Plus className="w-6 h-6 stroke-[2.5]" />
-          <span className="text-xs font-bold tracking-wide hidden sm:inline-block">Nuevo</span>
-          <span className="hidden sm:inline-block text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white/20 text-white leading-none">
-            N
-          </span>
-        </button>
-      )}
+      {/* Botón Flotante (solo escritorio; en móvil está en la barra inferior) */}
+      <button
+        onClick={openNewTx}
+        type="button"
+        className="hidden md:flex fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center gap-2.5 shadow-2xl shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
+        aria-label="Registrar nuevo movimiento (tecla N)"
+        title="Nuevo movimiento (Atajo: tecla 'N')"
+      >
+        <Plus className="w-6 h-6 stroke-[2.5]" />
+        <span className="text-xs font-bold tracking-wide">Nuevo</span>
+        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white/20 leading-none">N</span>
+      </button>
+
+      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={setActiveTab} onAdd={openNewTx} />
 
       {/* Modales */}
       <TransactionModal
         isOpen={isTxModalOpen}
-        onClose={() => setIsTxModalOpen(false)}
-        onSave={handleAddTransaction}
+        editing={editingTx}
+        onClose={() => {
+          setIsTxModalOpen(false);
+          setEditingTx(null);
+        }}
+        onSave={handleSaveTransaction}
         defaultYear={viewYear}
         defaultMonth={viewMonth}
       />
@@ -363,6 +485,14 @@ export default function App() {
         wallets={wallets}
         onClose={() => setIsWalletModalOpen(false)}
         onSave={handleSaveWallet}
+      />
+
+      <BudgetModal
+        isOpen={isBudgetModalOpen}
+        initialCategory={budgetCategory}
+        budgets={budgets}
+        onClose={() => setIsBudgetModalOpen(false)}
+        onSave={handleSaveBudget}
       />
 
       <GoalModal

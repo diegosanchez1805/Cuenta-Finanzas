@@ -1,9 +1,11 @@
 import React from 'react';
-import { Wallet, LogOut, Sun, Moon } from 'lucide-react';
+import { LogOut, Sun, Moon } from 'lucide-react';
 import Swal from 'sweetalert2';
+import Logo from './Logo';
 
-export default function Header({ onLogout, theme, onToggleTheme, userEmail }) {
+export default function Header({ onLogout, theme, onToggleTheme, userEmail, tabs, activeTab, onChangeTab }) {
   const isDark = theme === 'dark';
+  const initial = (userEmail || '?').charAt(0).toUpperCase();
 
   const handleLogout = () => {
     Swal.fire({
@@ -23,54 +25,66 @@ export default function Header({ onLogout, theme, onToggleTheme, userEmail }) {
   };
 
   return (
-    <header className="bg-white/90 dark:bg-slate-950/80 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-30 backdrop-blur-xl transition-colors duration-200 shadow-sm dark:shadow-none">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 ring-1 ring-black/5 dark:ring-white/10">
-            <Wallet className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white block leading-tight">Cuenta Clara</span>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold block">Control Financiero</span>
-          </div>
+    <header className="bg-white/80 dark:bg-[#0b0f19]/80 border-b border-slate-200/70 dark:border-slate-800/70 sticky top-0 z-30 backdrop-blur-xl transition-colors duration-200">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <Logo className="w-9 h-9 drop-shadow-[0_4px_10px_rgba(99,102,241,0.35)]" />
+          <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">Finanzas</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {userEmail && (
-            <span className="hidden md:inline-block text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 truncate max-w-[170px]" title={userEmail}>
-              {userEmail}
-            </span>
-          )}
-          {/* Botón selector de Modo Oscuro / Modo Claro */}
+        {/* Navegación de escritorio (en móvil se usa la barra inferior) */}
+        <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+          {tabs.map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onChangeTab(id)}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  active
+                    ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${active ? 'text-indigo-600 dark:text-indigo-400' : ''}`} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onToggleTheme}
             type="button"
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-900/90 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className="icon-btn"
             title={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
             aria-label="Alternar tema de color"
           >
-            {isDark ? (
-              <>
-                <Sun className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="font-medium">Modo claro</span>
-              </>
-            ) : (
-              <>
-                <Moon className="w-4 h-4 text-indigo-600" />
-                <span className="font-medium">Modo oscuro</span>
-              </>
-            )}
+            {isDark ? <Sun className="w-[18px] h-[18px] text-amber-400" /> : <Moon className="w-[18px] h-[18px]" />}
           </button>
 
-          {/* Botón Cerrar Sesión */}
+          <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-slate-200 dark:border-slate-800">
+            <div
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xs font-bold flex items-center justify-center"
+              title={userEmail}
+            >
+              {initial}
+            </div>
+            <span className="hidden lg:block text-xs font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
+              {userEmail}
+            </span>
+          </div>
+
           <button
             onClick={handleLogout}
             type="button"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 bg-slate-100 hover:bg-rose-50 dark:bg-slate-900/80 dark:hover:bg-rose-500/10 border border-slate-200 dark:border-slate-800 rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className="icon-btn hover:!text-rose-600 dark:hover:!text-rose-400 hover:!bg-rose-50 dark:hover:!bg-rose-500/10"
             title="Cerrar sesión"
+            aria-label="Cerrar sesión"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Cerrar sesión</span>
+            <LogOut className="w-[18px] h-[18px]" />
           </button>
         </div>
       </div>

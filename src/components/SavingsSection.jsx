@@ -37,7 +37,7 @@ export default function SavingsSection({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900/70 p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm dark:shadow-xl backdrop-blur-md transition-colors">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 card p-5">
         <div>
           <h2 className="font-bold text-base sm:text-lg text-slate-900 dark:text-white flex items-center gap-2">
             <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -96,7 +96,7 @@ export default function SavingsSection({
       )}
 
       {savingsGoals.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900/70 rounded-3xl p-10 text-center border border-slate-200/80 dark:border-slate-800 shadow-sm dark:shadow-xl max-w-md mx-auto backdrop-blur-md transition-colors">
+        <div className="card p-10 text-center max-w-md mx-auto">
           <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 text-indigo-500 dark:text-indigo-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
             <PiggyBank className="w-8 h-8" />
           </div>
@@ -106,7 +106,7 @@ export default function SavingsSection({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {savingsGoals.map((g) => {
             const pct =
               g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
@@ -115,7 +115,7 @@ export default function SavingsSection({
             return (
               <div
                 key={g.id}
-                className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 shadow-sm dark:shadow-xl flex flex-col justify-between space-y-4 backdrop-blur-md hover:border-indigo-200 dark:hover:border-slate-700 transition-all"
+                className="card p-5 flex flex-col justify-between space-y-4 backdrop-blur-md hover:border-indigo-200 dark:hover:border-slate-700 transition-all"
               >
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-2">

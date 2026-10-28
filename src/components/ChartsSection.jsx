@@ -42,7 +42,7 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
           (e) => (CATEGORY_PALETTE[e[0]] || CATEGORY_PALETTE['Otro']).color
         ),
         borderWidth: 2,
-        borderColor: isDark ? '#0f172a' : '#ffffff',
+        borderColor: isDark ? '#111827' : '#ffffff',
         hoverOffset: 4,
       },
     ],
@@ -54,7 +54,7 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
     cutout: '68%',
     plugins: {
       legend: {
-        position: 'right',
+        position: 'bottom',
         labels: {
           boxWidth: 10,
           boxHeight: 10,
@@ -115,14 +115,14 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
       {
         label: 'Ingresos',
         data: trendIngresos,
-        backgroundColor: '#10b981',
+        backgroundColor: '#10b981', maxBarThickness: 18,
         borderRadius: 6,
         borderSkipped: false,
       },
       {
         label: 'Gastos',
         data: trendEgresos,
-        backgroundColor: '#f43f5e',
+        backgroundColor: '#f43f5e', maxBarThickness: 18,
         borderRadius: 6,
         borderSkipped: false,
       },
@@ -177,9 +177,9 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
       {/* Gráfica de Categorías */}
-      <div className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl flex flex-col justify-between backdrop-blur-md transition-colors">
+      <div className="card p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
@@ -190,9 +190,9 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Distribución de gastos por categoría</p>
         </div>
 
-        <div className="relative flex items-center justify-center min-h-[190px]">
+        <div className="relative flex items-center justify-center min-h-[210px]">
           {hasCatData ? (
-            <div className="w-full h-[190px]">
+            <div className="w-full h-[210px]">
               <Doughnut data={donutData} options={donutOptions} />
             </div>
           ) : (
@@ -209,7 +209,7 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
       </div>
 
       {/* Gráfica de Tendencia */}
-      <div className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm dark:shadow-xl flex flex-col justify-between backdrop-blur-md transition-colors">
+      <div className="card p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
@@ -220,8 +220,8 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Comparativa de ingresos vs gastos</p>
         </div>
 
-        <div className="relative flex items-center justify-center min-h-[190px]">
-          <div className="w-full h-[190px]">
+        <div className="relative flex items-center justify-center min-h-[210px]">
+          <div className="w-full h-[210px]">
             <Bar data={trendData} options={trendOptions} />
           </div>
         </div>

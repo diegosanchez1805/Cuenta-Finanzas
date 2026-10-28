@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Wallet, Mail, Lock, ShieldCheck, Loader2, Sun, Moon } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, Loader2, Sun, Moon } from 'lucide-react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { traducirError } from '../utils/formatters';
 import Swal from 'sweetalert2';
+import Logo from './Logo';
 
 export default function AuthScreen({ theme, onToggleTheme }) {
   const isDark = theme === 'dark';
@@ -33,7 +34,7 @@ export default function AuthScreen({ theme, onToggleTheme }) {
         Swal.fire({
           icon: 'success',
           title: '¡Cuenta creada!',
-          text: 'Bienvenido a Cuenta Clara',
+          text: 'Bienvenido a Finanzas',
           confirmButtonColor: '#10b981',
           timer: 2000,
           showConfirmButton: false
@@ -54,7 +55,7 @@ export default function AuthScreen({ theme, onToggleTheme }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-slate-50 dark:bg-[#0b0f19] text-slate-900 dark:text-white relative overflow-hidden transition-colors duration-200">
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 bg-[#f5f6fa] dark:bg-[#0b0f19] text-slate-900 dark:text-white relative overflow-hidden transition-colors duration-200">
       {/* Botón de alternar tema en la esquina superior derecha */}
       <div className="absolute top-4 right-4 z-20">
         <button
@@ -85,11 +86,9 @@ export default function AuthScreen({ theme, onToggleTheme }) {
         <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-2xl border border-slate-200/80 dark:border-slate-800/90 rounded-3xl p-8 sm:p-10 shadow-xl dark:shadow-2xl dark:shadow-black/40 transition-colors duration-200">
           
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white shadow-xl shadow-indigo-600/30 mb-4 ring-4 ring-indigo-50 dark:ring-white/10">
-              <Wallet className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Cuenta Clara</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Tus finanzas personales, simples y bajo control.</p>
+            <Logo className="w-14 h-14 mx-auto mb-4 drop-shadow-[0_10px_24px_rgba(99,102,241,0.45)]" />
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Finanzas</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Tu dinero, claro y bajo control.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

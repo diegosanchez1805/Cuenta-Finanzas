@@ -1,84 +1,67 @@
 import React from 'react';
-import { CreditCard, Banknote, SlidersHorizontal, Pencil } from 'lucide-react';
+import { CreditCard, Banknote, Pencil, Wallet } from 'lucide-react';
 import { money } from '../utils/formatters';
 
 export default function WalletsSection({ wallets, onOpenWalletModal }) {
-  const totalDisponible = (wallets.card || 0) + (wallets.cash || 0);
+  const card = wallets.card || 0;
+  const cash = wallets.cash || 0;
+  const totalDisponible = card + cash;
+  const cardPct = totalDisponible > 0 ? (card / totalDisponible) * 100 : 50;
+
+  const rows = [
+    { type: 'card', label: 'Tarjeta', value: card, icon: CreditCard, tone: 'indigo' },
+    { type: 'cash', label: 'Efectivo', value: cash, icon: Banknote, tone: 'emerald' },
+  ];
 
   return (
-    <section className="mb-6">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Mi dinero disponible
-          </span>
-          <span className="px-2.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-900 border border-slate-300/40 dark:border-slate-800 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 shadow-sm">
-            Total: {money(totalDisponible)}
-          </span>
-        </div>
-        <button
-          onClick={() => onOpenWalletModal('card')}
-          type="button"
-          className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors flex items-center gap-1 focus:outline-none"
-          title="Ajustar dinero en tarjeta o efectivo"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          <span>Ajustar saldos</span>
-        </button>
+    <section className="card p-5 flex flex-col">
+      <div className="flex items-center justify-between mb-1">
+        <span className="section-title flex items-center gap-1.5">
+          <Wallet className="w-3.5 h-3.5" />
+          Dinero disponible
+        </span>
+      </div>
+      <div className="text-3xl font-extrabold tracking-tight tabular-nums text-slate-900 dark:text-white">
+        {money(totalDisponible)}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {/* Tarjeta: En Tarjeta */}
-        <div className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-indigo-500/25 hover:border-indigo-200 dark:hover:border-indigo-500/50 rounded-2xl p-4 shadow-sm dark:shadow-xl transition-all duration-200 flex items-center justify-between group backdrop-blur-md">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 shadow-inner">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                En Tarjeta
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-0.5 truncate">
-                {money(wallets.card)}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => onOpenWalletModal('card')}
-            type="button"
-            className="px-2.5 py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 border border-slate-200/60 dark:border-slate-800 hover:border-indigo-100 dark:hover:border-indigo-500/30 transition-all flex items-center gap-1.5 text-xs font-semibold focus:outline-none"
-            title="Ajustar saldo en tarjeta"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            <span>Editar</span>
-          </button>
-        </div>
+      {/* Distribución tarjeta / efectivo */}
+      <div className="flex h-1.5 rounded-full overflow-hidden mt-3 mb-4 bg-slate-100 dark:bg-slate-800">
+        {totalDisponible > 0 && (
+          <>
+            <div className="bg-indigo-500 transition-all duration-500" style={{ width: `${cardPct}%` }} />
+            <div className="bg-emerald-500 transition-all duration-500" style={{ width: `${100 - cardPct}%` }} />
+          </>
+        )}
+      </div>
 
-        {/* Tarjeta: En Efectivo */}
-        <div className="bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-emerald-500/25 hover:border-emerald-200 dark:hover:border-emerald-500/50 rounded-2xl p-4 shadow-sm dark:shadow-xl transition-all duration-200 flex items-center justify-between group backdrop-blur-md">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-100 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0 shadow-inner">
-              <Banknote className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                En Efectivo
-              </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-0.5 truncate">
-                {money(wallets.cash)}
-              </div>
-            </div>
-          </div>
+      <div className="space-y-2 mt-auto">
+        {rows.map(({ type, label, value, icon: Icon, tone }) => (
           <button
-            onClick={() => onOpenWalletModal('cash')}
+            key={type}
             type="button"
-            className="px-2.5 py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-slate-200/60 dark:border-slate-800 hover:border-emerald-100 dark:hover:border-emerald-500/30 transition-all flex items-center gap-1.5 text-xs font-semibold focus:outline-none"
-            title="Ajustar dinero en efectivo"
+            onClick={() => onOpenWalletModal(type)}
+            className="group w-full flex items-center justify-between gap-3 p-2.5 -mx-1 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-left"
+            title={`Ajustar saldo en ${label.toLowerCase()}`}
           >
-            <Pencil className="w-3.5 h-3.5" />
-            <span>Editar</span>
+            <span className="flex items-center gap-3 min-w-0">
+              <span
+                className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  tone === 'indigo'
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400'
+                    : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400'
+                }`}
+              >
+                <Icon className="w-[18px] h-[18px]" />
+              </span>
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{label}</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">{money(value)}</span>
+              <Pencil className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 transition-colors" />
+            </span>
           </button>
-        </div>
+        ))}
       </div>
     </section>
   );
