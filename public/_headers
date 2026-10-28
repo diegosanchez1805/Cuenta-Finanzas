@@ -1,0 +1,19 @@
+# Cabeceras de seguridad para todo el sitio
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com; frame-src https://*.firebaseapp.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+# Los archivos con hash nunca cambian: caché de un año
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# El service worker y el HTML siempre se revisan para recibir actualizaciones
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
