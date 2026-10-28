@@ -1,9 +1,9 @@
 import React from 'react';
-import { LogOut, Sun, Moon } from 'lucide-react';
+import { LogOut, Sun, Moon, Eye, EyeOff } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Logo from './Logo';
 
-export default function Header({ onLogout, theme, onToggleTheme, userEmail, tabs, activeTab, onChangeTab }) {
+export default function Header({ onLogout, theme, onToggleTheme, userEmail, amountsHidden, onToggleAmounts, tabs, activeTab, onChangeTab }) {
   const isDark = theme === 'dark';
   const initial = (userEmail || '?').charAt(0).toUpperCase();
 
@@ -25,7 +25,7 @@ export default function Header({ onLogout, theme, onToggleTheme, userEmail, tabs
   };
 
   return (
-    <header className="bg-white/80 dark:bg-[#0b0f19]/80 border-b border-slate-200/70 dark:border-slate-800/70 sticky top-0 z-30 backdrop-blur-xl transition-colors duration-200">
+    <header className="pt-safe bg-white/80 dark:bg-[#0b0f19]/80 border-b border-slate-200/70 dark:border-slate-800/70 sticky top-0 z-30 backdrop-blur-xl transition-colors duration-200">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <Logo className="w-9 h-9 drop-shadow-[0_4px_10px_rgba(99,102,241,0.35)]" />
@@ -55,6 +55,16 @@ export default function Header({ onLogout, theme, onToggleTheme, userEmail, tabs
         </nav>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={onToggleAmounts}
+            type="button"
+            className={`icon-btn ${amountsHidden ? '!text-indigo-600 dark:!text-indigo-400 !bg-indigo-50 dark:!bg-indigo-500/10' : ''}`}
+            title={amountsHidden ? 'Mostrar cantidades' : 'Ocultar cantidades'}
+            aria-label={amountsHidden ? 'Mostrar cantidades' : 'Ocultar cantidades'}
+            aria-pressed={amountsHidden}
+          >
+            {amountsHidden ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+          </button>
           <button
             onClick={onToggleTheme}
             type="button"

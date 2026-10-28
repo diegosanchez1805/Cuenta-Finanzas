@@ -28,8 +28,16 @@ export const CATEGORY_PALETTE = {
   "Otro": { color: "#94a3b8", icon: "CircleDollarSign", bg: "bg-slate-50 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/25" }
 };
 
+// Modo privado: oculta todas las cantidades en pantalla
+let hideAmounts = false;
+export const setHideAmounts = (value) => {
+  hideAmounts = value;
+};
+
 export const money = (n) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n || 0);
+  hideAmounts
+    ? "$ ••••"
+    : new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n || 0);
 
 // Fecha local (no UTC) para que de noche no se registre con el día siguiente
 export const todayISO = () => {
@@ -79,6 +87,11 @@ export function traducirError(code) {
     "auth/email-already-in-use": "Ya existe una cuenta con ese correo.",
     "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
     "auth/invalid-credential": "Correo o contraseña incorrectos.",
+    "auth/too-many-requests": "Demasiados intentos fallidos. Espera unos minutos o cambia tu contraseña.",
+    "auth/user-disabled": "Esta cuenta está deshabilitada.",
+    "auth/admin-restricted-operation": "El registro de cuentas nuevas está desactivado.",
+    "auth/operation-not-allowed": "El registro de cuentas nuevas está desactivado.",
+    "auth/network-request-failed": "Sin conexión. Revisa tu internet e intenta de nuevo.",
   };
   return map[code] || "Ocurrió un error. Intenta de nuevo.";
 }

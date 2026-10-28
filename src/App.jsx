@@ -15,7 +15,8 @@ import {
   increment
 } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
-import { sumBy, txOfMonth, prevMonthOf } from './utils/formatters';
+import { sumBy, txOfMonth, prevMonthOf, setHideAmounts } from './utils/formatters';
+import Swal from 'sweetalert2';
 
 // Componentes
 import Header from './components/Header';
@@ -55,6 +56,25 @@ function walletEffect(tx, sign = 1) {
   return { [tx.method]: delta };
 }
 
+// Cerrar sesión tras este tiempo sin usar la app
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'lastActivity';
+
+const readStorage = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* sin almacenamiento local */
+  }
+};
+
 function mergeEffects(...effects) {
   const out = {};
   effects.forEach((e) => {
@@ -86,6 +106,17 @@ export default function App() {
   });
 
   const isDark = theme === 'dark';
+
+  // Modo privado: oculta las cantidades (se aplica antes de pintar los componentes)
+  const [amountsHidden, setAmountsHidden] = useState(() => readStorage('hideAmounts') === '1');
+  setHideAmounts(amountsHidden);
+
+  const handleToggleAmounts = () => {
+    setAmountsHidden((prev) => {
+      writeStorage('hideAmounts', prev ? '0' : '1');
+      return !prev;
+    });
+  };
 
   // Estados de modales
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -160,6 +191,61 @@ export default function App() {
     });
     return () => unsubscribeAuth();
   }, []);
+
+  // Cierre de sesión automático por inactividad. La hora de la última actividad se
+  // guarda para detectarlo también cuando el celular estuvo bloqueado o en segundo plano.
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const expired = () => {
+      const last = Number(readStorage(LAST_ACTIVITY_KEY)) || Date.now();
+      return Date.now() - last > INACTIVITY_LIMIT_MS;
+    };
+
+    const logoutForInactivity = () => {
+      writeStorage(LAST_ACTIVITY_KEY, '');
+      signOut(auth);
+      Swal.fire({
+        icon: 'info',
+        title: 'Sesión cerrada',
+        text: 'Cerramos tu sesión por inactividad para proteger tus datos.',
+        confirmButtonColor: '#4f46e5',
+      });
+    };
+
+    if (expired()) {
+      logoutForInactivity();
+      return;
+    }
+
+    let lastWrite = 0;
+    const markActivity = () => {
+      const now = Date.now();
+      if (now - lastWrite > 15000) {
+        lastWrite = now;
+        writeStorage(LAST_ACTIVITY_KEY, String(now));
+      }
+    };
+    markActivity();
+
+    const check = () => {
+      if (expired()) logoutForInactivity();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((ev) => window.addEventListener(ev, markActivity, { passive: true }));
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = setInterval(check, 30000);
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, markActivity));
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(interval);
+    };
+  }, [currentUser]);
 
   // Escuchar Firestore en tiempo real cuando hay usuario autenticado
   useEffect(() => {
@@ -358,6 +444,8 @@ export default function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         userEmail={currentUser.email}
+        amountsHidden={amountsHidden}
+        onToggleAmounts={handleToggleAmounts}
         tabs={TABS}
         activeTab={activeTab}
         onChangeTab={setActiveTab}

@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Reglas de seguridad de Finanzas.
+// Cópialas en Firebase Console → Firestore Database → Reglas → Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada usuario solo puede leer y escribir sus propios datos
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Todo lo demás está bloqueado
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -37,7 +37,10 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
-/* Espacio para la barra inferior en iPhone */
+/* Espacios seguros en iPhone (notch y barra inferior) */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }

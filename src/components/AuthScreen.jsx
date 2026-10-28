@@ -1,17 +1,45 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ShieldCheck, Loader2, Sun, Moon } from 'lucide-react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { Mail, Lock, ShieldCheck, Loader2, Sun, Moon, Eye, EyeOff } from 'lucide-react';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { traducirError } from '../utils/formatters';
 import Swal from 'sweetalert2';
 import Logo from './Logo';
+
+// El registro de cuentas nuevas está apagado: es una app personal.
+// Para permitirlo, define VITE_ALLOW_SIGNUP=true en las variables de entorno.
+const ALLOW_SIGNUP = import.meta.env.VITE_ALLOW_SIGNUP === 'true';
 
 export default function AuthScreen({ theme, onToggleTheme }) {
   const isDark = theme === 'dark';
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handleResetPassword = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      Swal.fire({
+        icon: 'info',
+        text: 'Escribe tu correo arriba y vuelve a tocar "¿Olvidaste tu contraseña?".',
+        confirmButtonColor: '#6366f1'
+      });
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+    } catch (err) {
+      // No revelamos si el correo existe o no
+    }
+    Swal.fire({
+      icon: 'success',
+      title: 'Revisa tu correo',
+      text: 'Si existe una cuenta con ese correo, te enviamos un enlace para cambiar tu contraseña.',
+      confirmButtonColor: '#6366f1'
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,7 +57,13 @@ export default function AuthScreen({ theme, onToggleTheme }) {
 
     setLoading(true);
     try {
-      if (isRegisterMode) {
+      // Reiniciar el contador de inactividad antes de entrar
+      try {
+        localStorage.setItem('lastActivity', String(Date.now()));
+      } catch {
+        /* sin almacenamiento local */
+      }
+      if (isRegisterMode && ALLOW_SIGNUP) {
         await createUserWithEmailAndPassword(auth, cleanEmail, password);
         Swal.fire({
           icon: 'success',
@@ -102,6 +136,7 @@ export default function AuthScreen({ theme, onToggleTheme }) {
                 </div>
                 <input
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@correo.com"
@@ -119,13 +154,23 @@ export default function AuthScreen({ theme, onToggleTheme }) {
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
                   <Lock className="w-4 h-4" />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
+                  autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 dark:focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-950 transition-all"
+                  className="w-full pl-10 pr-10 py-3 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 dark:focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-950 transition-all"
                 />
               </div>
             </div>
@@ -139,14 +184,25 @@ export default function AuthScreen({ theme, onToggleTheme }) {
               <span>{isRegisterMode ? 'Crear cuenta' : 'Entrar'}</span>
             </button>
 
-            <div className="pt-2 text-center">
-              <button
-                type="button"
-                onClick={() => setIsRegisterMode(!isRegisterMode)}
-                className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline transition-colors focus:outline-none"
-              >
-                {isRegisterMode ? '¿Ya tienes cuenta? Entra aquí' : '¿No tienes cuenta? Créala aquí'}
-              </button>
+            <div className="pt-2 flex flex-col items-center gap-2">
+              {!isRegisterMode && (
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline transition-colors focus:outline-none"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              )}
+              {ALLOW_SIGNUP && (
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterMode(!isRegisterMode)}
+                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline transition-colors focus:outline-none"
+                >
+                  {isRegisterMode ? '¿Ya tienes cuenta? Entra aquí' : '¿No tienes cuenta? Créala aquí'}
+                </button>
+              )}
             </div>
           </form>
 
