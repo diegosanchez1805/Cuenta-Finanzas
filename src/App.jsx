@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   onAuthStateChanged,
-  signOut
+  signOut,
+  updateProfile
 } from 'firebase/auth';
 import {
   collection,
@@ -37,6 +38,7 @@ import TransactionModal from './modals/TransactionModal';
 import WalletModal from './modals/WalletModal';
 import GoalModal from './modals/GoalModal';
 import DepositModal from './modals/DepositModal';
+import ProfileModal from './modals/ProfileModal';
 import BudgetModal from './modals/BudgetModal';
 
 // Iconos
@@ -107,6 +109,16 @@ export default function App() {
 
   const isDark = theme === 'dark';
 
+  // Nombre a mostrar (perfil de Firebase); nunca se muestra el correo
+  const [displayName, setDisplayName] = useState('');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  const handleSaveName = async (name) => {
+    if (!currentUser) return;
+    await updateProfile(currentUser, { displayName: name });
+    setDisplayName(name);
+  };
+
   // Modo privado: oculta las cantidades (se aplica antes de pintar los componentes)
   const [amountsHidden, setAmountsHidden] = useState(() => readStorage('hideAmounts') === '1');
   setHideAmounts(amountsHidden);
@@ -161,6 +173,7 @@ export default function App() {
         setIsGoalModalOpen(false);
         setIsDepositModalOpen(false);
         setIsBudgetModalOpen(false);
+        setIsProfileModalOpen(false);
         return;
       }
 
@@ -187,6 +200,7 @@ export default function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      setDisplayName(user?.displayName || '');
       setAuthLoading(false);
     });
     return () => unsubscribeAuth();
@@ -433,7 +447,6 @@ export default function App() {
     const h = new Date().getHours();
     return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
   })();
-  const userName = (currentUser.displayName || currentUser.email || '').split('@')[0];
   const showMonth = activeTab !== 'ahorros';
   const activeLabel = TABS.find((t) => t.id === activeTab)?.label;
 
@@ -443,7 +456,8 @@ export default function App() {
         onLogout={() => signOut(auth)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
-        userEmail={currentUser.email}
+        displayName={displayName}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
         amountsHidden={amountsHidden}
         onToggleAmounts={handleToggleAmounts}
         tabs={TABS}
@@ -456,7 +470,7 @@ export default function App() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {activeTab === 'resumen' ? `${greeting}, ${userName}` : 'Finanzas'}
+              {activeTab === 'resumen' ? (displayName ? `${greeting}, ${displayName}` : greeting) : 'Finanzas'}
             </p>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {activeTab === 'resumen' ? 'Tu resumen' : activeLabel}
@@ -587,6 +601,13 @@ export default function App() {
         isOpen={isGoalModalOpen}
         onClose={() => setIsGoalModalOpen(false)}
         onSave={handleAddGoal}
+      />
+
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        currentName={displayName}
+        onClose={() => setIsProfileModalOpen(false)}
+        onSave={handleSaveName}
       />
 
       <DepositModal

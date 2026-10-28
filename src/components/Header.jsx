@@ -3,9 +3,9 @@ import { LogOut, Sun, Moon, Eye, EyeOff } from 'lucide-react';
 import Swal from 'sweetalert2';
 import Logo from './Logo';
 
-export default function Header({ onLogout, theme, onToggleTheme, userEmail, amountsHidden, onToggleAmounts, tabs, activeTab, onChangeTab }) {
+export default function Header({ onLogout, theme, onToggleTheme, displayName, onOpenProfile, amountsHidden, onToggleAmounts, tabs, activeTab, onChangeTab }) {
   const isDark = theme === 'dark';
-  const initial = (userEmail || '?').charAt(0).toUpperCase();
+  const initial = (displayName || '?').charAt(0).toUpperCase();
 
   const handleLogout = () => {
     Swal.fire({
@@ -75,17 +75,20 @@ export default function Header({ onLogout, theme, onToggleTheme, userEmail, amou
             {isDark ? <Sun className="w-[18px] h-[18px] text-amber-400" /> : <Moon className="w-[18px] h-[18px]" />}
           </button>
 
-          <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-slate-200 dark:border-slate-800">
-            <div
-              className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xs font-bold flex items-center justify-center"
-              title={userEmail}
-            >
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            className="flex items-center gap-2 pl-1.5 pr-1.5 lg:pr-3 py-1 ml-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            title="Editar tu perfil"
+            aria-label="Editar tu perfil"
+          >
+            <span className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xs font-bold flex items-center justify-center">
               {initial}
-            </div>
-            <span className="hidden lg:block text-xs font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
-              {userEmail}
             </span>
-          </div>
+            <span className="hidden lg:block text-xs font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
+              {displayName || 'Agrega tu nombre'}
+            </span>
+          </button>
 
           <button
             onClick={handleLogout}
