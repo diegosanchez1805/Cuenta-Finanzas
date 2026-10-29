@@ -59,7 +59,7 @@ function walletEffect(tx, sign = 1) {
 }
 
 // Cerrar sesión tras este tiempo sin usar la app
-const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
+const INACTIVITY_LIMIT_MS = 8 * 60 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'lastActivity';
 
 const readStorage = (key) => {
