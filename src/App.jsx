@@ -696,13 +696,11 @@ export default function App() {
       <button
         onClick={() => openNewTx()}
         type="button"
-        className="hidden md:flex fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center gap-2.5 shadow-2xl shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
+        className="hidden md:flex fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center justify-center shadow-2xl shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
         aria-label="Registrar nuevo movimiento (tecla N)"
         title="Nuevo movimiento (Atajo: tecla 'N')"
       >
-        <Plus className="w-6 h-6 stroke-[2.5]" />
-        <span className="text-xs font-bold tracking-wide">Nuevo</span>
-        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white/20 leading-none">N</span>
+        <Plus className="w-7 h-7 stroke-[2.5]" />
       </button>
 
       <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={setActiveTab} onAdd={() => openNewTx()} />
