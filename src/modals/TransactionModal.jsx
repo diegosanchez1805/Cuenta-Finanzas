@@ -1,14 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Pencil, X, Loader2, CreditCard, Banknote } from 'lucide-react';
+import { PlusCircle, Pencil, X, Loader2, CreditCard, Banknote, ArrowRight, Repeat } from 'lucide-react';
 import { CATS_INGRESO, CATS_EGRESO, CATEGORY_PALETTE, todayISO } from '../utils/formatters';
 import { getCategoryIcon } from '../utils/categoryIcons';
+import { FREQUENCIES } from '../utils/recurring';
 import Swal from 'sweetalert2';
+
+const TYPES = [
+  { id: 'egreso', label: 'Gasto', active: 'bg-rose-500' },
+  { id: 'ingreso', label: 'Ingreso', active: 'bg-emerald-500' },
+  { id: 'transferencia', label: 'Transferencia', active: 'bg-indigo-600' },
+];
+
+const METHODS = [
+  { id: 'card', label: 'Tarjeta', icon: CreditCard },
+  { id: 'cash', label: 'Efectivo', icon: Banknote },
+];
 
 export default function TransactionModal({
   isOpen,
   onClose,
-  onSave,
-  editing, // movimiento a editar, o null para uno nuevo
+  onSave, // (entry, frequency) => Promise
+  editing, // movimiento a editar, o null
+  editingRule, // regla recurrente a editar, o null
+  initialType = 'egreso', // tipo con el que abre un movimiento nuevo
   defaultYear,
   defaultMonth,
 }) {
@@ -18,30 +32,43 @@ export default function TransactionModal({
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState('card');
+  const [from, setFrom] = useState('card');
   const [affectsWallet, setAffectsWallet] = useState(true);
+  const [frequency, setFrequency] = useState('none');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
     setSaving(false);
 
-    if (editing) {
-      setType(editing.type);
-      setAmount(String(editing.amount ?? ''));
-      setCategory(editing.category);
-      setDescription(editing.description || '');
-      setDate(editing.date || todayISO());
-      setMethod(editing.method || 'card');
-      setAffectsWallet(!!editing.affectsWallet);
+    const source = editing || editingRule;
+    if (source) {
+      setType(source.type);
+      setAmount(String(source.amount ?? ''));
+      setCategory(source.category || CATS_EGRESO[0]);
+      setDescription(source.description || '');
+      setDate((editingRule ? source.nextDate : source.date) || todayISO());
+      setMethod(source.method || 'card');
+      setFrom(source.from || 'card');
+      setAffectsWallet(source.type === 'transferencia' ? true : !!source.affectsWallet);
+      setFrequency(editingRule ? source.frequency : 'none');
       return;
     }
 
-    setType('egreso');
+    setType(initialType);
     setAmount('');
     setCategory(CATS_EGRESO[0]);
     setDescription('');
-    setMethod(localStorage.getItem('lastMethod') || 'card');
+    let lastMethod = 'card';
+    try {
+      lastMethod = localStorage.getItem('lastMethod') || 'card';
+    } catch {
+      /* sin almacenamiento local */
+    }
+    setMethod(lastMethod);
+    setFrom('card');
     setAffectsWallet(true);
+    setFrequency('none');
 
     const now = new Date();
     const isCurrentMonth = defaultYear === now.getFullYear() && defaultMonth === now.getMonth();
@@ -51,10 +78,14 @@ export default function TransactionModal({
       const mStr = String(defaultMonth + 1).padStart(2, '0');
       setDate(`${defaultYear}-${mStr}-01`);
     }
-  }, [isOpen, editing, defaultYear, defaultMonth]);
+  }, [isOpen, editing, editingRule, initialType, defaultYear, defaultMonth]);
 
   const handleTypeChange = (newType) => {
     setType(newType);
+    if (newType === 'transferencia') {
+      setFrequency('none');
+      return;
+    }
     const cats = newType === 'ingreso' ? CATS_INGRESO : CATS_EGRESO;
     if (!cats.includes(category)) setCategory(cats[0]);
   };
@@ -67,26 +98,50 @@ export default function TransactionModal({
       return;
     }
 
+    const isTransfer = type === 'transferencia';
+    const entry = isTransfer
+      ? {
+          type,
+          amount: num,
+          category: 'Transferencia',
+          description: description.trim(),
+          date,
+          from,
+          to: from === 'card' ? 'cash' : 'card',
+          affectsWallet: true,
+        }
+      : {
+          type,
+          amount: num,
+          category,
+          description: description.trim(),
+          date,
+          method,
+          affectsWallet,
+        };
+
     setSaving(true);
     try {
-      await onSave({
-        type,
-        amount: num,
-        category,
-        description: description.trim(),
-        date,
-        method,
-        affectsWallet,
-      });
-      try {
-        localStorage.setItem('lastMethod', method);
-      } catch {
-        /* sin almacenamiento local */
+      await onSave(entry, frequency);
+      if (!isTransfer) {
+        try {
+          localStorage.setItem('lastMethod', method);
+        } catch {
+          /* sin almacenamiento local */
+        }
       }
       onClose();
       Swal.fire({
         icon: 'success',
-        title: editing ? 'Movimiento actualizado' : 'Movimiento guardado',
+        title: editingRule
+          ? 'Recurrente actualizado'
+          : frequency !== 'none'
+          ? 'Movimiento recurrente creado'
+          : editing
+          ? 'Movimiento actualizado'
+          : isTransfer
+          ? 'Transferencia guardada'
+          : 'Movimiento guardado',
         toast: true,
         position: 'top-end',
         showConfirmButton: false,
@@ -101,8 +156,13 @@ export default function TransactionModal({
 
   if (!isOpen) return null;
 
-  const currentCats = type === 'ingreso' ? CATS_INGRESO : CATS_EGRESO;
   const isIngreso = type === 'ingreso';
+  const isTransfer = type === 'transferencia';
+  const currentCats = isIngreso ? CATS_INGRESO : CATS_EGRESO;
+  const to = from === 'card' ? 'cash' : 'card';
+  // Las transferencias no se repiten; un movimiento ya existente tampoco se convierte en recurrente
+  const canRepeat = !isTransfer && !editing;
+  const title = editingRule ? 'Editar recurrente' : editing ? 'Editar movimiento' : 'Nuevo movimiento';
 
   return (
     <div
@@ -115,38 +175,34 @@ export default function TransactionModal({
       >
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-5">
           <h2 className="font-bold text-lg flex items-center gap-2">
-            {editing ? (
+            {editingRule ? (
+              <Repeat className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            ) : editing ? (
               <Pencil className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             ) : (
               <PlusCircle className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             )}
-            <span>{editing ? 'Editar movimiento' : 'Nuevo movimiento'}</span>
+            <span>{title}</span>
           </h2>
           <button type="button" onClick={onClose} className="icon-btn !w-8 !h-8 !rounded-full" aria-label="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Selector Tipo: Gasto / Ingreso */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl mb-4 border border-slate-200/60 dark:border-slate-800/80">
-          <button
-            type="button"
-            onClick={() => handleTypeChange('egreso')}
-            className={`py-2 text-xs font-bold rounded-lg transition-all ${
-              !isIngreso ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Gasto
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTypeChange('ingreso')}
-            className={`py-2 text-xs font-bold rounded-lg transition-all ${
-              isIngreso ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Ingreso
-          </button>
+        {/* Selector de tipo (una regla recurrente no puede volverse transferencia) */}
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl mb-4 border border-slate-200/60 dark:border-slate-800/80">
+          {TYPES.filter((t) => !(editingRule && t.id === 'transferencia')).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => handleTypeChange(t.id)}
+              className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                type === t.id ? `${t.active} text-white shadow-sm` : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         <div className="space-y-4">
@@ -167,48 +223,83 @@ export default function TransactionModal({
             />
           </div>
 
-          {/* Categorías como fichas */}
-          <div>
-            <label className="block section-title mb-2">Categoría</label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {currentCats.map((c) => {
-                const Icon = getCategoryIcon(c);
-                const meta = CATEGORY_PALETTE[c] || CATEGORY_PALETTE['Otro'];
-                const active = category === c;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCategory(c)}
-                    className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border text-[11px] font-semibold transition-all ${
-                      active
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <span className={`w-7 h-7 rounded-lg border flex items-center justify-center ${meta.bg}`}>
-                      <Icon className="w-4 h-4" />
-                    </span>
-                    <span className="truncate max-w-full">{c}</span>
-                  </button>
-                );
-              })}
+          {isTransfer ? (
+            /* Origen y destino de la transferencia */
+            <div>
+              <label className="block section-title mb-2">Mover dinero</label>
+              <div className="flex items-center gap-2">
+                {[from, to].map((m, i) => {
+                  const meta = METHODS.find((x) => x.id === m);
+                  const Icon = meta.icon;
+                  return (
+                    <React.Fragment key={m}>
+                      {i === 1 && <ArrowRight className="w-5 h-5 text-slate-400 flex-shrink-0" />}
+                      <div className="flex-1 flex flex-col items-center gap-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{i === 0 ? 'De' : 'A'}</span>
+                        <span className="flex items-center gap-1.5 text-sm font-bold">
+                          <Icon className="w-4 h-4" />
+                          {meta.label}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setFrom(to)}
+                className="mt-2 w-full text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Invertir dirección
+              </button>
+              <p className="text-[11px] text-slate-400 mt-1">
+                No cuenta como gasto ni ingreso; solo mueve dinero entre tus saldos.
+              </p>
             </div>
-          </div>
+          ) : (
+            /* Categorías como fichas */
+            <div>
+              <label className="block section-title mb-2">Categoría</label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {currentCats.map((c) => {
+                  const Icon = getCategoryIcon(c);
+                  const meta = CATEGORY_PALETTE[c] || CATEGORY_PALETTE['Otro'];
+                  const active = category === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(c)}
+                      className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border text-[11px] font-semibold transition-all ${
+                        active
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <span className={`w-7 h-7 rounded-lg border flex items-center justify-center ${meta.bg}`}>
+                        <Icon className="w-4 h-4" />
+                      </span>
+                      <span className="truncate max-w-full">{c}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block section-title mb-1">Descripción</label>
               <input
                 type="text"
-                placeholder="Ej. Supermercado"
+                placeholder={isTransfer ? 'Ej. Retiro en cajero' : 'Ej. Supermercado'}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="input"
               />
             </div>
             <div>
-              <label className="block section-title mb-1">Fecha</label>
+              <label className="block section-title mb-1">{frequency !== 'none' ? 'Primera fecha' : 'Fecha'}</label>
               <input
                 type="date"
                 value={date}
@@ -219,47 +310,64 @@ export default function TransactionModal({
             </div>
           </div>
 
-          {/* Método de pago y ajuste de saldo */}
-          <div>
-            <label className="block section-title mb-1.5">{isIngreso ? 'Recibido en' : 'Pagado con'}</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'card', label: 'Tarjeta', icon: CreditCard },
-                { id: 'cash', label: 'Efectivo', icon: Banknote },
-              ].map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMethod(id)}
-                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                    method === id
-                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </button>
-              ))}
+          {canRepeat && (
+            <div>
+              <label className="block section-title mb-1">Repetir</label>
+              <select value={frequency} onChange={(e) => setFrequency(e.target.value)} className="input font-medium">
+                {FREQUENCIES.filter((f) => !(editingRule && f.id === 'none')).map((f) => (
+                  <option key={f.id} value={f.id} className="bg-white dark:bg-slate-900">
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              {frequency !== 'none' && (
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Se registrará solo en cada fecha. Puedes pausarlo o borrarlo en Movimientos → Recurrentes.
+                </p>
+              )}
             </div>
-            <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={affectsWallet}
-                onChange={(e) => setAffectsWallet(e.target.checked)}
-                className="w-4 h-4 rounded accent-indigo-600"
-              />
-              <span className="text-xs text-slate-600 dark:text-slate-300">
-                {isIngreso ? 'Sumar' : 'Restar'} automáticamente de mi saldo en {method === 'cash' ? 'efectivo' : 'tarjeta'}
-              </span>
-            </label>
-          </div>
+          )}
+
+          {/* Método de pago y ajuste de saldo */}
+          {!isTransfer && (
+            <div>
+              <label className="block section-title mb-1.5">{isIngreso ? 'Recibido en' : 'Pagado con'}</label>
+              <div className="grid grid-cols-2 gap-2">
+                {METHODS.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMethod(id)}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                      method === id
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={affectsWallet}
+                  onChange={(e) => setAffectsWallet(e.target.checked)}
+                  className="w-4 h-4 rounded accent-indigo-600"
+                />
+                <span className="text-xs text-slate-600 dark:text-slate-300">
+                  {isIngreso ? 'Sumar' : 'Restar'} automáticamente de mi saldo en {method === 'cash' ? 'efectivo' : 'tarjeta'}
+                </span>
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="pt-5 mt-1">
           <button type="submit" disabled={saving} className="btn-primary w-full !py-3">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>{editing ? 'Guardar cambios' : 'Guardar movimiento'}</span>
+            <span>{editing || editingRule ? 'Guardar cambios' : isTransfer ? 'Guardar transferencia' : 'Guardar movimiento'}</span>
           </button>
         </div>
       </form>

@@ -19,10 +19,16 @@ export default function SavingsSection({
     totalTarget > 0 ? Math.min(100, Math.round((totalSaved / totalTarget) * 100)) : 0;
 
   const handleDelete = (goal) => {
+    const hasMoney = (goal.saved || 0) > 0;
     Swal.fire({
       title: '¿Borrar meta?',
-      text: 'El progreso acumulado se eliminará de tus metas.',
+      text: hasMoney
+        ? `Tiene ${money(goal.saved)} ahorrados. ¿A dónde los regresamos?`
+        : 'Esta acción no se puede deshacer.',
       icon: 'warning',
+      input: hasMoney ? 'radio' : undefined,
+      inputOptions: hasMoney ? { card: 'Tarjeta', cash: 'Efectivo', none: 'A ningún lado' } : undefined,
+      inputValue: 'card',
       showCancelButton: true,
       confirmButtonColor: '#f43f5e',
       cancelButtonColor: isDark ? '#475569' : '#94a3b8',
@@ -30,7 +36,7 @@ export default function SavingsSection({
       cancelButtonText: 'Cancelar',
     }).then((result) => {
       if (result.isConfirmed) {
-        onDeleteGoal(goal.id);
+        onDeleteGoal(goal, hasMoney && result.value !== 'none' ? result.value : null);
       }
     });
   };

@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   GraduationCap,
   Repeat,
+  ArrowLeftRight,
 } from 'lucide-react';
 
 const ICONS = {
@@ -29,6 +30,7 @@ const ICONS = {
   Freelance: Laptop,
   Inversión: TrendingUp,
   Regalo: Gift,
+  Transferencia: ArrowLeftRight,
 };
 
 export function getCategoryIcon(catName) {

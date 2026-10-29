@@ -25,6 +25,7 @@ export const CATEGORY_PALETTE = {
   "Freelance": { color: "#14b8a6", icon: "Laptop", bg: "bg-teal-50 dark:bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-500/25" },
   "Inversión": { color: "#818cf8", icon: "TrendingUp", bg: "bg-indigo-50 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/25" },
   "Regalo": { color: "#c084fc", icon: "Gift", bg: "bg-purple-50 dark:bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/25" },
+  "Transferencia": { color: "#64748b", icon: "ArrowLeftRight", bg: "bg-slate-100 dark:bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-500/25" },
   "Otro": { color: "#94a3b8", icon: "CircleDollarSign", bg: "bg-slate-50 dark:bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-500/25" }
 };
 
@@ -48,6 +49,8 @@ export const todayISO = () => {
 export const monthKeyOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
 export const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+
+export const METHOD_LABEL = { card: "Tarjeta", cash: "Efectivo" };
 
 export const sumBy = (txs, type) =>
   txs.filter((t) => t.type === type).reduce((s, t) => s + (t.amount || 0), 0);

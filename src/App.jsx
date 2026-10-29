@@ -13,10 +13,12 @@ import {
   updateDoc,
   setDoc,
   writeBatch,
-  increment
+  increment,
+  runTransaction
 } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
-import { sumBy, txOfMonth, prevMonthOf, setHideAmounts } from './utils/formatters';
+import { sumBy, txOfMonth, prevMonthOf, setHideAmounts, todayISO } from './utils/formatters';
+import { nextOccurrence, alignBiweekly } from './utils/recurring';
 import Swal from 'sweetalert2';
 
 // Componentes
@@ -31,6 +33,7 @@ import ChartsSection from './components/ChartsSection';
 import TransactionList, { RecentTransactions } from './components/TransactionList';
 import BudgetsSection, { BudgetAlerts } from './components/BudgetsSection';
 import SavingsSection from './components/SavingsSection';
+import RecurringSection from './components/RecurringSection';
 import Logo from './components/Logo';
 
 // Modales
@@ -53,7 +56,12 @@ const TABS = [
 
 // Efecto de un movimiento sobre los saldos: { card: +x } / { cash: -y }
 function walletEffect(tx, sign = 1) {
-  if (!tx || !tx.affectsWallet || !tx.method) return {};
+  if (!tx) return {};
+  if (tx.type === 'transferencia') {
+    if (!tx.from || !tx.to || tx.from === tx.to) return {};
+    return { [tx.from]: -tx.amount * sign, [tx.to]: tx.amount * sign };
+  }
+  if (!tx.affectsWallet || !tx.method) return {};
   const delta = (tx.type === 'ingreso' ? tx.amount : -tx.amount) * sign;
   return { [tx.method]: delta };
 }
@@ -96,6 +104,7 @@ export default function App() {
   const [savingsGoals, setSavingsGoals] = useState([]);
   const [wallets, setWallets] = useState({ card: 0, cash: 0 });
   const [budgets, setBudgets] = useState({});
+  const [recurring, setRecurring] = useState([]);
 
   // Navegación temporal y pestañas
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
@@ -133,6 +142,8 @@ export default function App() {
   // Estados de modales
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
+  const [editingRule, setEditingRule] = useState(null);
+  const [txInitialType, setTxInitialType] = useState('egreso');
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [walletModalType, setWalletModalType] = useState('card');
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -159,8 +170,10 @@ export default function App() {
     metaThemeColor.setAttribute('content', theme === 'dark' ? '#0b0f19' : '#f5f6fa');
   }, [theme]);
 
-  const openNewTx = () => {
+  const openNewTx = (type = 'egreso') => {
     setEditingTx(null);
+    setEditingRule(null);
+    setTxInitialType(type);
     setIsTxModalOpen(true);
   };
 
@@ -268,6 +281,7 @@ export default function App() {
       setSavingsGoals([]);
       setWallets({ card: 0, cash: 0 });
       setBudgets({});
+      setRecurring([]);
       return;
     }
 
@@ -307,13 +321,68 @@ export default function App() {
       () => setBudgets({})
     );
 
+    // 5. Movimientos recurrentes
+    const recurringColRef = collection(db, 'users', currentUser.uid, 'recurring');
+    const unsubscribeRecurring = onSnapshot(
+      recurringColRef,
+      (snapshot) => setRecurring(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setRecurring([])
+    );
+
     return () => {
       unsubscribeTx();
       unsubscribeSavings();
       unsubscribeWallets();
       unsubscribeBudgets();
+      unsubscribeRecurring();
     };
   }, [currentUser]);
+
+  // Registra los movimientos recurrentes que ya vencieron. Se hace en una transacción
+  // que vuelve a leer la regla, así otro dispositivo abierto no los duplica.
+  useEffect(() => {
+    if (!currentUser) return;
+    const uid = currentUser.uid;
+    const today = todayISO();
+    const due = recurring.filter((r) => r.active && r.nextDate && r.nextDate <= today);
+
+    due.forEach((rule) => {
+      const rRef = doc(db, 'users', uid, 'recurring', rule.id);
+      runTransaction(db, async (t) => {
+        const snap = await t.get(rRef);
+        if (!snap.exists()) return;
+        const r = snap.data();
+        if (!r.active || !r.nextDate || r.nextDate > today) return;
+
+        let next = r.nextDate;
+        let effect = {};
+        // Tope de seguridad por si la app estuvo mucho tiempo sin abrirse
+        for (let i = 0; next && next <= today && i < 60; i++) {
+          const entry = {
+            type: r.type,
+            amount: r.amount,
+            category: r.category,
+            description: r.description || '',
+            date: next,
+            method: r.method,
+            affectsWallet: !!r.affectsWallet,
+            recurringId: rule.id,
+            createdAt: Date.now(),
+          };
+          t.set(doc(collection(db, 'users', uid, 'transactions')), entry);
+          effect = mergeEffects(effect, walletEffect(entry));
+          next = nextOccurrence(next, r.frequency, r.day);
+        }
+
+        const update = {};
+        Object.entries(effect).forEach(([k, v]) => {
+          if (v) update[k] = increment(v);
+        });
+        if (Object.keys(update).length) t.set(doc(db, 'users', uid, 'wallets', 'current'), update, { merge: true });
+        t.update(rRef, { nextDate: next });
+      }).catch(() => {});
+    });
+  }, [currentUser, recurring]);
 
   // Cambiar de mes
   const handleChangeMonth = (delta) => {
@@ -339,17 +408,43 @@ export default function App() {
   // Operaciones de Firestore
   const walletRef = () => doc(db, 'users', currentUser.uid, 'wallets', 'current');
 
-  // Aplica el cambio de saldo dentro del mismo lote para que sea atómico
-  const addWalletEffect = (batch, effect) => {
+  // Aplica el cambio de saldo dentro del mismo lote o transacción para que sea atómico
+  const addWalletEffect = (writer, effect) => {
     const update = {};
     Object.entries(effect).forEach(([k, v]) => {
       if (v) update[k] = increment(v);
     });
-    if (Object.keys(update).length) batch.set(walletRef(), update, { merge: true });
+    if (Object.keys(update).length) writer.set(walletRef(), update, { merge: true });
   };
 
-  const handleSaveTransaction = async (entry) => {
+  const ruleRef = (id) => doc(db, 'users', currentUser.uid, 'recurring', id);
+
+  const ruleFromEntry = (entry, frequency) => {
+    const { date, ...rest } = entry;
+    return {
+      ...rest,
+      frequency,
+      day: Number(date.slice(8, 10)),
+      nextDate: frequency === 'biweekly' ? alignBiweekly(date) : date,
+    };
+  };
+
+  const handleSaveTransaction = async (entry, frequency = 'none') => {
     if (!currentUser) return;
+
+    if (editingRule) {
+      await updateDoc(ruleRef(editingRule.id), ruleFromEntry(entry, frequency));
+      return;
+    }
+    if (!editingTx && frequency !== 'none') {
+      await addDoc(collection(db, 'users', currentUser.uid, 'recurring'), {
+        ...ruleFromEntry(entry, frequency),
+        active: true,
+        createdAt: Date.now(),
+      });
+      return;
+    }
+
     const batch = writeBatch(db);
     if (editingTx) {
       const ref = doc(db, 'users', currentUser.uid, 'transactions', editingTx.id);
@@ -372,8 +467,35 @@ export default function App() {
   };
 
   const handleEditTransaction = (tx) => {
+    setEditingRule(null);
     setEditingTx(tx);
     setIsTxModalOpen(true);
+  };
+
+  const handleEditRule = (rule) => {
+    setEditingTx(null);
+    setEditingRule(rule);
+    setIsTxModalOpen(true);
+  };
+
+  // Al reanudar, saltar las fechas que pasaron mientras estuvo en pausa
+  const handleToggleRule = async (rule) => {
+    if (!currentUser) return;
+    if (rule.active) {
+      await updateDoc(ruleRef(rule.id), { active: false });
+      return;
+    }
+    const today = todayISO();
+    let next = rule.nextDate;
+    for (let i = 0; next && next < today && i < 1000; i++) {
+      next = nextOccurrence(next, rule.frequency, rule.day);
+    }
+    await updateDoc(ruleRef(rule.id), { active: true, nextDate: next });
+  };
+
+  const handleDeleteRule = async (rule) => {
+    if (!currentUser) return;
+    await deleteDoc(ruleRef(rule.id));
   };
 
   const handleSaveWallet = async (type, amount) => {
@@ -400,16 +522,22 @@ export default function App() {
     await addDoc(colRef, goal);
   };
 
-  const handleDeleteGoal = async (id) => {
+  // Borrar una meta; returnTo ('card' | 'cash') regresa lo ahorrado a ese saldo
+  const handleDeleteGoal = async (goal, returnTo) => {
     if (!currentUser) return;
-    const docRef = doc(db, 'users', currentUser.uid, 'savings', id);
-    await deleteDoc(docRef);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'users', currentUser.uid, 'savings', goal.id));
+    if (returnTo) addWalletEffect(batch, { [returnTo]: goal.saved || 0 });
+    await batch.commit();
   };
 
-  const handleUpdateGoalAmount = async (id, newSaved) => {
+  // walletDelta mueve el dinero entre la meta y la tarjeta o el efectivo
+  const handleUpdateGoalAmount = async (id, newSaved, walletDelta) => {
     if (!currentUser) return;
-    const docRef = doc(db, 'users', currentUser.uid, 'savings', id);
-    await updateDoc(docRef, { saved: newSaved });
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'users', currentUser.uid, 'savings', id), { saved: newSaved });
+    if (walletDelta) addWalletEffect(batch, walletDelta);
+    await batch.commit();
   };
 
   const handleOpenDepositModal = (goal) => {
@@ -499,7 +627,11 @@ export default function App() {
                   prevEgreso={prevEgreso}
                 />
               </div>
-              <WalletsSection wallets={wallets} onOpenWalletModal={handleOpenWalletModal} />
+              <WalletsSection
+                wallets={wallets}
+                onOpenWalletModal={handleOpenWalletModal}
+                onTransfer={() => openNewTx('transferencia')}
+              />
             </div>
 
             <BudgetAlerts budgets={budgets} monthTx={monthTx} onOpen={() => setActiveTab('presupuestos')} />
@@ -515,7 +647,7 @@ export default function App() {
                   monthTx={monthTx}
                   onEdit={handleEditTransaction}
                   onSeeAll={() => setActiveTab('movimientos')}
-                  onAdd={openNewTx}
+                  onAdd={() => openNewTx()}
                 />
               </div>
             </div>
@@ -524,7 +656,14 @@ export default function App() {
 
         {/* Vista: Movimientos */}
         {activeTab === 'movimientos' && (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl space-y-4">
+            <RecurringSection
+              rules={recurring}
+              onEdit={handleEditRule}
+              onToggle={handleToggleRule}
+              onDelete={handleDeleteRule}
+              isDark={isDark}
+            />
             <TransactionList
               monthTx={monthTx}
               viewYear={viewYear}
@@ -555,7 +694,7 @@ export default function App() {
 
       {/* Botón Flotante (solo escritorio; en móvil está en la barra inferior) */}
       <button
-        onClick={openNewTx}
+        onClick={() => openNewTx()}
         type="button"
         className="hidden md:flex fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center gap-2.5 shadow-2xl shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
         aria-label="Registrar nuevo movimiento (tecla N)"
@@ -566,15 +705,18 @@ export default function App() {
         <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-white/20 leading-none">N</span>
       </button>
 
-      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={setActiveTab} onAdd={openNewTx} />
+      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={setActiveTab} onAdd={() => openNewTx()} />
 
       {/* Modales */}
       <TransactionModal
         isOpen={isTxModalOpen}
         editing={editingTx}
+        editingRule={editingRule}
+        initialType={txInitialType}
         onClose={() => {
           setIsTxModalOpen(false);
           setEditingTx(null);
+          setEditingRule(null);
         }}
         onSave={handleSaveTransaction}
         defaultYear={viewYear}
@@ -613,6 +755,7 @@ export default function App() {
       <DepositModal
         isOpen={isDepositModalOpen}
         goal={selectedGoal}
+        wallets={wallets}
         onClose={() => {
           setIsDepositModalOpen(false);
           setSelectedGoal(null);

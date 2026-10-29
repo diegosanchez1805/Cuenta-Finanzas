@@ -1,8 +1,8 @@
 import React from 'react';
-import { CreditCard, Banknote, Pencil, Wallet } from 'lucide-react';
+import { CreditCard, Banknote, Pencil, Wallet, ArrowLeftRight } from 'lucide-react';
 import { money } from '../utils/formatters';
 
-export default function WalletsSection({ wallets, onOpenWalletModal }) {
+export default function WalletsSection({ wallets, onOpenWalletModal, onTransfer }) {
   const card = wallets.card || 0;
   const cash = wallets.cash || 0;
   const totalDisponible = card + cash;
@@ -20,6 +20,15 @@ export default function WalletsSection({ wallets, onOpenWalletModal }) {
           <Wallet className="w-3.5 h-3.5" />
           Dinero disponible
         </span>
+        <button
+          type="button"
+          onClick={onTransfer}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+          title="Pasar dinero entre tarjeta y efectivo"
+        >
+          <ArrowLeftRight className="w-3.5 h-3.5" />
+          Mover dinero
+        </button>
       </div>
       <div className="text-3xl font-extrabold tracking-tight tabular-nums text-slate-900 dark:text-white">
         {money(totalDisponible)}

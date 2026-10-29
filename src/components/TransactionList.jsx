@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Trash2, Search, Download, X, CreditCard, Banknote, ReceiptText, ChevronRight } from 'lucide-react';
-import { CATEGORY_PALETTE, money, monthKeyOf, dayLabel } from '../utils/formatters';
+import { Trash2, Search, Download, X, CreditCard, Banknote, ReceiptText, ChevronRight, Repeat } from 'lucide-react';
+import { CATEGORY_PALETTE, METHOD_LABEL, money, monthKeyOf, dayLabel } from '../utils/formatters';
 import { getCategoryIcon } from '../utils/categoryIcons';
 import Swal from 'sweetalert2';
 
 function TxRow({ t, onEdit, onDelete }) {
   const isIngreso = t.type === 'ingreso';
+  const isTransfer = t.type === 'transferencia';
   const catMeta = CATEGORY_PALETTE[t.category] || CATEGORY_PALETTE['Otro'];
   const IconComp = getCategoryIcon(t.category);
   const MethodIcon = t.method === 'cash' ? Banknote : CreditCard;
@@ -21,8 +22,13 @@ function TxRow({ t, onEdit, onDelete }) {
             {t.description || t.category}
           </span>
           <span className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            <span>{t.category}</span>
-            {t.method && (
+            <span>{isTransfer ? `${METHOD_LABEL[t.from]} → ${METHOD_LABEL[t.to]}` : t.category}</span>
+            {t.recurringId && (
+              <span title="Movimiento recurrente" className="inline-flex">
+                <Repeat className="w-3 h-3 text-indigo-500" />
+              </span>
+            )}
+            {!isTransfer && t.method && (
               <>
                 <span className="text-slate-300 dark:text-slate-600">•</span>
                 <MethodIcon className="w-3 h-3" />
@@ -36,10 +42,14 @@ function TxRow({ t, onEdit, onDelete }) {
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span
           className={`font-mono font-bold text-sm ${
-            isIngreso ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'
+            isIngreso
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : isTransfer
+              ? 'text-slate-400 dark:text-slate-500'
+              : 'text-slate-800 dark:text-slate-100'
           }`}
         >
-          {isIngreso ? '+' : '−'}
+          {isIngreso ? '+' : isTransfer ? '' : '−'}
           {money(t.amount)}
         </span>
         {onDelete && (
@@ -130,10 +140,10 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
       .map((t) => [
         t.date || '',
-        t.type === 'ingreso' ? 'Ingreso' : 'Gasto',
+        t.type === 'ingreso' ? 'Ingreso' : t.type === 'transferencia' ? 'Transferencia' : 'Gasto',
         `"${(t.category || '').replace(/"/g, '""')}"`,
         `"${(t.description || '').replace(/"/g, '""')}"`,
-        t.method === 'cash' ? 'Efectivo' : t.method === 'card' ? 'Tarjeta' : '',
+        t.type === 'transferencia' ? `${METHOD_LABEL[t.from]} a ${METHOD_LABEL[t.to]}` : METHOD_LABEL[t.method] || '',
         t.amount || 0,
       ]);
 
@@ -162,7 +172,7 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
   const handleDelete = (tx) => {
     Swal.fire({
       title: '¿Borrar movimiento?',
-      text: tx.affectsWallet ? 'También se revertirá el cambio en tu saldo.' : 'Esta acción no se puede deshacer.',
+      text: tx.affectsWallet ? 'También se revertirá el cambio en tus saldos.' : 'Esta acción no se puede deshacer.',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#f43f5e',
@@ -181,6 +191,7 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
     { id: 'all', label: `Todos (${monthTx.length})`, active: 'text-slate-900 dark:text-white' },
     { id: 'ingreso', label: 'Ingresos', active: 'text-emerald-600 dark:text-emerald-400' },
     { id: 'egreso', label: 'Gastos', active: 'text-rose-600 dark:text-rose-400' },
+    { id: 'transferencia', label: 'Transf.', active: 'text-slate-700 dark:text-slate-200' },
   ];
 
   return (
@@ -207,7 +218,7 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
           )}
         </div>
 
-        <div className="flex items-center gap-2 justify-between sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2 justify-between sm:justify-end">
           <div className="inline-flex p-0.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs">
             {filters.map((f) => (
               <button
@@ -247,7 +258,10 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
         <div className="space-y-4">
           {days.map((day) => {
             const items = groups[day];
-            const net = items.reduce((s, t) => s + (t.type === 'ingreso' ? t.amount : -t.amount), 0);
+            const net = items.reduce(
+              (s, t) => s + (t.type === 'ingreso' ? t.amount : t.type === 'egreso' ? -t.amount : 0),
+              0
+            );
             return (
               <section key={day} className="card p-2 sm:p-3">
                 <div className="flex items-center justify-between px-3 pt-1 pb-2">
