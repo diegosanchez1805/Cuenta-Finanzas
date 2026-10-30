@@ -27,6 +27,65 @@
   }
 }
 
+/* Fondo deslizante de la pestaña activa */
+.nav-indicator.is-animated {
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), width 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s;
+}
+
+/* Entrada del contenido al cambiar de sección (la dirección sigue el orden de las pestañas) */
+.tab-enter-right {
+  animation: tabEnterRight 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tab-enter-left {
+  animation: tabEnterLeft 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes tabEnterRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tabEnterLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Las tarjetas de cada sección aparecen escalonadas */
+.tab-enter-right > *,
+.tab-enter-left > * {
+  animation: tabItemIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tab-enter-right > :nth-child(2), .tab-enter-left > :nth-child(2) { animation-delay: 0.04s; }
+.tab-enter-right > :nth-child(3), .tab-enter-left > :nth-child(3) { animation-delay: 0.08s; }
+.tab-enter-right > :nth-child(4), .tab-enter-left > :nth-child(4) { animation-delay: 0.12s; }
+.tab-enter-right > :nth-child(n + 5), .tab-enter-left > :nth-child(n + 5) { animation-delay: 0.16s; }
+@keyframes tabItemIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Título de la sección */
+.tab-title-in {
+  animation: tabItemIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Barra inferior: la píldora de la pestaña activa crece desde el centro */
+.bottom-nav-pill {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s;
+}
+
+/* Respetar a quien prefiere menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  .nav-indicator.is-animated,
+  .tab-enter-right,
+  .tab-enter-left,
+  .tab-enter-right > *,
+  .tab-enter-left > *,
+  .tab-title-in,
+  .bottom-nav-pill {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* Ocultar flechas de los campos numéricos */
 input[type='number']::-webkit-outer-spin-button,
 input[type='number']::-webkit-inner-spin-button {

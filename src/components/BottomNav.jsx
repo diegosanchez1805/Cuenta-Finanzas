@@ -12,11 +12,20 @@ export default function BottomNav({ tabs, activeTab, onChangeTab, onAdd }) {
         key={id}
         type="button"
         onClick={() => onChangeTab(id)}
-        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-bold transition-colors ${
+        aria-current={active ? 'page' : undefined}
+        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 text-[10px] font-bold transition-colors duration-300 ${
           active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'
         }`}
       >
-        <Icon className="w-5 h-5" />
+        <span className="relative flex items-center justify-center w-12 h-7">
+          <span
+            aria-hidden="true"
+            className={`bottom-nav-pill absolute inset-0 rounded-full bg-indigo-100 dark:bg-indigo-500/20 ${
+              active ? 'scale-100 opacity-100' : 'scale-50 opacity-0'
+            }`}
+          />
+          <Icon className={`relative w-5 h-5 transition-transform duration-300 ${active ? '-translate-y-px' : ''}`} />
+        </span>
         <span>{label}</span>
       </button>
     );

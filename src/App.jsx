@@ -110,6 +110,17 @@ export default function App() {
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [activeTab, setActiveTab] = useState('resumen');
+  // Dirección de la animación: hacia la derecha si la nueva pestaña está después
+  const [tabDirection, setTabDirection] = useState('right');
+
+  const goToTab = (id) => {
+    if (id === activeTab) return;
+    const from = TABS.findIndex((t) => t.id === activeTab);
+    const to = TABS.findIndex((t) => t.id === id);
+    setTabDirection(to > from ? 'right' : 'left');
+    setActiveTab(id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Tema: 'dark' | 'light' (por defecto 'dark', persistido en localStorage)
   const [theme, setTheme] = useState(() => {
@@ -590,7 +601,7 @@ export default function App() {
         onToggleAmounts={handleToggleAmounts}
         tabs={TABS}
         activeTab={activeTab}
-        onChangeTab={setActiveTab}
+        onChangeTab={goToTab}
       />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
@@ -600,7 +611,7 @@ export default function App() {
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {activeTab === 'resumen' ? (displayName ? `${greeting}, ${displayName}` : greeting) : 'Finanzas'}
             </p>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+            <h1 key={`title-${activeTab}`} className="tab-title-in text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               {activeTab === 'resumen' ? 'Tu resumen' : activeLabel}
             </h1>
           </div>
@@ -614,9 +625,15 @@ export default function App() {
           )}
         </div>
 
+        <div
+          key={activeTab}
+          className={`${tabDirection === 'left' ? 'tab-enter-left' : 'tab-enter-right'} ${
+            activeTab === 'resumen' ? 'space-y-5' : activeTab === 'movimientos' ? 'max-w-3xl space-y-4' : ''
+          }`}
+        >
         {/* Vista: Resumen */}
         {activeTab === 'resumen' && (
-          <div className="space-y-5">
+          <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-2">
                 <BalanceHero
@@ -634,7 +651,7 @@ export default function App() {
               />
             </div>
 
-            <BudgetAlerts budgets={budgets} monthTx={monthTx} onOpen={() => setActiveTab('presupuestos')} />
+            <BudgetAlerts budgets={budgets} monthTx={monthTx} onOpen={() => goToTab('presupuestos')} />
 
             <InsightsSection monthTx={monthTx} viewYear={viewYear} viewMonth={viewMonth} prevEgreso={prevEgreso} />
 
@@ -646,17 +663,17 @@ export default function App() {
                 <RecentTransactions
                   monthTx={monthTx}
                   onEdit={handleEditTransaction}
-                  onSeeAll={() => setActiveTab('movimientos')}
+                  onSeeAll={() => goToTab('movimientos')}
                   onAdd={() => openNewTx()}
                 />
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* Vista: Movimientos */}
         {activeTab === 'movimientos' && (
-          <div className="max-w-3xl space-y-4">
+          <>
             <RecurringSection
               rules={recurring}
               onEdit={handleEditRule}
@@ -672,7 +689,7 @@ export default function App() {
               onDeleteTransaction={handleDeleteTransaction}
               isDark={isDark}
             />
-          </div>
+          </>
         )}
 
         {/* Vista: Presupuestos */}
@@ -690,6 +707,7 @@ export default function App() {
             isDark={isDark}
           />
         )}
+        </div>
       </main>
 
       {/* Botón Flotante (solo escritorio; en móvil está en la barra inferior) */}
@@ -703,7 +721,7 @@ export default function App() {
         <Plus className="w-7 h-7 stroke-[2.5]" />
       </button>
 
-      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={setActiveTab} onAdd={() => openNewTx()} />
+      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={goToTab} onAdd={() => openNewTx()} />
 
       {/* Modales */}
       <TransactionModal
