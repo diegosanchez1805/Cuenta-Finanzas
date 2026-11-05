@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, CreditCard, Banknote, Ban, PiggyBank } from 'lucide-react';
+import { X, Loader2, Ban, PiggyBank } from 'lucide-react';
 import { money } from '../utils/formatters';
+import { moneyAccounts, accountIcon, accountLabel, getAccount } from '../utils/registry';
 import Swal from 'sweetalert2';
-
-const SOURCES = [
-  { id: 'card', label: 'Tarjeta', icon: CreditCard },
-  { id: 'cash', label: 'Efectivo', icon: Banknote },
-  { id: 'none', label: 'No mover', icon: Ban },
-];
 
 export default function DepositModal({ isOpen, goal, wallets, onClose, onSave }) {
   const [depositType, setDepositType] = useState('abonar');
@@ -19,9 +14,10 @@ export default function DepositModal({ isOpen, goal, wallets, onClose, onSave })
     if (isOpen) {
       setDepositType('abonar');
       setAmount('');
-      let last = 'card';
+      let last = moneyAccounts()[0]?.id || 'none';
       try {
-        last = localStorage.getItem('lastGoalSource') || 'card';
+        const saved = localStorage.getItem('lastGoalSource');
+        if (saved === 'none' || (saved && getAccount(saved))) last = saved;
       } catch {
         /* sin almacenamiento local */
       }
@@ -54,7 +50,7 @@ export default function DepositModal({ isOpen, goal, wallets, onClose, onSave })
       const res = await Swal.fire({
         icon: 'warning',
         title: 'Saldo insuficiente',
-        text: `En ${source === 'card' ? 'tarjeta' : 'efectivo'} tienes ${money(wallets[source] || 0)}. Tu saldo quedaría en negativo.`,
+        text: `En ${accountLabel(source)} tienes ${money(wallets[source] || 0)}. Tu saldo quedaría en negativo.`,
         showCancelButton: true,
         confirmButtonColor: '#6366f1',
         confirmButtonText: 'Abonar de todos modos',
@@ -90,6 +86,11 @@ export default function DepositModal({ isOpen, goal, wallets, onClose, onSave })
   };
 
   if (!isOpen || !goal) return null;
+
+  const sources = [
+    ...moneyAccounts().map((a) => ({ id: a.id, label: a.name, icon: accountIcon(a.id) })),
+    { id: 'none', label: 'No mover', icon: Ban },
+  ];
 
   return (
     <div
@@ -155,7 +156,7 @@ export default function DepositModal({ isOpen, goal, wallets, onClose, onSave })
           <div>
             <label className="block section-title mb-1.5">{isDeposit ? 'Tomar el dinero de' : 'Regresar el dinero a'}</label>
             <div className="grid grid-cols-3 gap-2">
-              {SOURCES.map(({ id, label, icon: Icon }) => (
+              {sources.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   type="button"
@@ -167,7 +168,7 @@ export default function DepositModal({ isOpen, goal, wallets, onClose, onSave })
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  {label}
+                  <span className="truncate max-w-full px-1">{label}</span>
                   {id !== 'none' && (
                     <span className="font-mono text-[10px] font-semibold text-slate-400">{money(wallets[id])}</span>
                   )}
@@ -178,8 +179,8 @@ export default function DepositModal({ isOpen, goal, wallets, onClose, onSave })
               {source === 'none'
                 ? 'Solo cambia el progreso de la meta; tus saldos no se tocan.'
                 : isDeposit
-                ? `Se restará de tu saldo en ${source === 'card' ? 'tarjeta' : 'efectivo'}.`
-                : `Se sumará a tu saldo en ${source === 'card' ? 'tarjeta' : 'efectivo'}.`}
+                ? `Se restará de tu saldo en ${accountLabel(source)}.`
+                : `Se sumará a tu saldo en ${accountLabel(source)}.`}
             </p>
           </div>
         </div>

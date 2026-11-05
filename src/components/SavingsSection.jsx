@@ -1,12 +1,35 @@
 import React from 'react';
-import { Target, Plus, PiggyBank, CheckCircle, Trash2, ArrowLeftRight } from 'lucide-react';
-import { money } from '../utils/formatters';
+import { Target, Plus, PiggyBank, CheckCircle, Trash2, ArrowLeftRight, Pencil, CalendarClock } from 'lucide-react';
+import { money, todayISO } from '../utils/formatters';
+import { moneyAccounts } from '../utils/registry';
+import { shortDate } from '../utils/recurring';
 import Swal from 'sweetalert2';
+
+// Cuánto falta y cuánto apartar para llegar a tiempo a una meta con fecha
+function deadlinePlan(goal) {
+  if (!goal.deadline) return null;
+  const remaining = Math.max(0, (goal.target || 0) - (goal.saved || 0));
+  const [y, m, d] = goal.deadline.split('-').map(Number);
+  const [ty, tm, td] = todayISO().split('-').map(Number);
+  const daysLeft = Math.round((new Date(y, m - 1, d) - new Date(ty, tm - 1, td)) / 86400000);
+  if (daysLeft < 0) return { overdue: true, remaining };
+  const months = Math.max(1, Math.ceil(daysLeft / 30.44));
+  const fortnights = Math.max(1, Math.ceil(daysLeft / 15.22));
+  return {
+    overdue: false,
+    remaining,
+    daysLeft,
+    months,
+    perMonth: remaining / months,
+    perFortnight: remaining / fortnights,
+  };
+}
 
 export default function SavingsSection({
   savingsGoals,
   onOpenNewGoalModal,
   onOpenDepositModal,
+  onEditGoal,
   onDeleteGoal,
   isDark,
 }) {
@@ -27,8 +50,10 @@ export default function SavingsSection({
         : 'Esta acción no se puede deshacer.',
       icon: 'warning',
       input: hasMoney ? 'radio' : undefined,
-      inputOptions: hasMoney ? { card: 'Tarjeta', cash: 'Efectivo', none: 'A ningún lado' } : undefined,
-      inputValue: 'card',
+      inputOptions: hasMoney
+        ? { ...Object.fromEntries(moneyAccounts().map((a) => [a.id, a.name])), none: 'A ningún lado' }
+        : undefined,
+      inputValue: moneyAccounts()[0]?.id || 'none',
       showCancelButton: true,
       confirmButtonColor: '#f43f5e',
       cancelButtonColor: isDark ? '#475569' : '#94a3b8',
@@ -117,6 +142,7 @@ export default function SavingsSection({
             const pct =
               g.target > 0 ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
             const isComplete = pct >= 100;
+            const plan = isComplete ? null : deadlinePlan(g);
 
             return (
               <div
@@ -144,7 +170,16 @@ export default function SavingsSection({
                       </h4>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      <button
+                        onClick={() => onEditGoal(g)}
+                        type="button"
+                        className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
+                        title="Editar meta"
+                        aria-label="Editar meta"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => handleDelete(g)}
                         type="button"
@@ -184,6 +219,32 @@ export default function SavingsSection({
                       style={{ width: `${pct}%` }}
                     />
                   </div>
+
+                  {/* Plan para llegar a la fecha límite */}
+                  {plan && (
+                    <div
+                      className={`mt-3 flex items-start gap-2 p-2.5 rounded-xl text-xs ${
+                        plan.overdue
+                          ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
+                          : 'bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300'
+                      }`}
+                    >
+                      <CalendarClock className="w-4 h-4 flex-shrink-0 mt-px" />
+                      {plan.overdue ? (
+                        <span>
+                          La fecha ({shortDate(g.deadline)}) ya pasó y faltan <b>{money(plan.remaining)}</b>. Edita la meta para ponerle otra fecha.
+                        </span>
+                      ) : (
+                        <span>
+                          {plan.daysLeft <= 31
+                            ? `Faltan ${plan.daysLeft} día${plan.daysLeft === 1 ? '' : 's'}`
+                            : `Faltan ${plan.months} meses`}{' '}
+                          (hasta el {shortDate(g.deadline)}). Aparta <b className="font-mono">{money(plan.perMonth)}</b> al mes o{' '}
+                          <b className="font-mono">{money(plan.perFortnight)}</b> por quincena.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Botón de Acción */}

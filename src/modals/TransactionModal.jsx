@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Pencil, X, Loader2, CreditCard, Banknote, ArrowRight, Repeat } from 'lucide-react';
-import { CATS_INGRESO, CATS_EGRESO, CATEGORY_PALETTE, todayISO } from '../utils/formatters';
-import { getCategoryIcon } from '../utils/categoryIcons';
+import { PlusCircle, Pencil, X, Loader2, ArrowDown, Repeat, Plus } from 'lucide-react';
+import { todayISO } from '../utils/formatters';
 import { FREQUENCIES } from '../utils/recurring';
+import { getAccounts, getAccount, accountIcon, getCategories, getCategoryMeta } from '../utils/registry';
 import Swal from 'sweetalert2';
 
 const TYPES = [
@@ -11,10 +11,34 @@ const TYPES = [
   { id: 'transferencia', label: 'Transferencia', active: 'bg-indigo-600' },
 ];
 
-const METHODS = [
-  { id: 'card', label: 'Tarjeta', icon: CreditCard },
-  { id: 'cash', label: 'Efectivo', icon: Banknote },
-];
+// Fila de cuentas para elegir una
+function AccountPicker({ value, onChange, exclude }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {getAccounts()
+        .filter((a) => a.id !== exclude)
+        .map((a) => {
+          const Icon = accountIcon(a.id);
+          const active = value === a.id;
+          return (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => onChange(a.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+                active
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+                  : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
+              }`}
+            >
+              <Icon className="w-4 h-4" style={{ color: active ? undefined : a.color }} />
+              {a.name}
+            </button>
+          );
+        })}
+    </div>
+  );
+}
 
 export default function TransactionModal({
   isOpen,
@@ -23,33 +47,42 @@ export default function TransactionModal({
   editing, // movimiento a editar, o null
   editingRule, // regla recurrente a editar, o null
   initialType = 'egreso', // tipo con el que abre un movimiento nuevo
+  initialTo = null, // destino predefinido de una transferencia (pagar tarjeta)
+  onNewCategory, // (type, onCreated) abre la ventana de nueva categoría
   defaultYear,
   defaultMonth,
 }) {
   const [type, setType] = useState('egreso');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState(CATS_EGRESO[0]);
+  const [category, setCategory] = useState('Comida');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState('card');
   const [from, setFrom] = useState('card');
+  const [to, setTo] = useState('cash');
   const [affectsWallet, setAffectsWallet] = useState(true);
   const [frequency, setFrequency] = useState('none');
   const [saving, setSaving] = useState(false);
 
+  // Primera cuenta distinta de `id`, para que origen y destino nunca coincidan
+  const otherThan = (id) => getAccounts().find((a) => a.id !== id)?.id || id;
+
   useEffect(() => {
     if (!isOpen) return;
     setSaving(false);
+    const accounts = getAccounts();
+    const firstId = accounts[0]?.id || 'card';
 
     const source = editing || editingRule;
     if (source) {
       setType(source.type);
       setAmount(String(source.amount ?? ''));
-      setCategory(source.category || CATS_EGRESO[0]);
+      setCategory(source.category || 'Otro');
       setDescription(source.description || '');
       setDate((editingRule ? source.nextDate : source.date) || todayISO());
-      setMethod(source.method || 'card');
-      setFrom(source.from || 'card');
+      setMethod(source.method || firstId);
+      setFrom(source.from || firstId);
+      setTo(source.to || otherThan(source.from || firstId));
       setAffectsWallet(source.type === 'transferencia' ? true : !!source.affectsWallet);
       setFrequency(editingRule ? source.frequency : 'none');
       return;
@@ -57,16 +90,25 @@ export default function TransactionModal({
 
     setType(initialType);
     setAmount('');
-    setCategory(CATS_EGRESO[0]);
-    setDescription('');
-    let lastMethod = 'card';
+    setCategory(getCategories(initialType === 'ingreso' ? 'ingreso' : 'egreso')[0]);
+    setDescription(initialTo && getAccount(initialTo) ? `Pago de ${getAccount(initialTo).name}` : '');
+    let lastMethod = firstId;
     try {
-      lastMethod = localStorage.getItem('lastMethod') || 'card';
+      const saved = localStorage.getItem('lastMethod');
+      if (saved && getAccount(saved)) lastMethod = saved;
     } catch {
       /* sin almacenamiento local */
     }
     setMethod(lastMethod);
-    setFrom('card');
+    if (initialTo) {
+      // Pagar una tarjeta: el dinero sale de la primera cuenta que no sea de crédito
+      const payer = accounts.find((a) => a.type !== 'credit' && a.id !== initialTo)?.id || otherThan(initialTo);
+      setFrom(payer);
+      setTo(initialTo);
+    } else {
+      setFrom(firstId);
+      setTo(otherThan(firstId));
+    }
     setAffectsWallet(true);
     setFrequency('none');
 
@@ -78,7 +120,7 @@ export default function TransactionModal({
       const mStr = String(defaultMonth + 1).padStart(2, '0');
       setDate(`${defaultYear}-${mStr}-01`);
     }
-  }, [isOpen, editing, editingRule, initialType, defaultYear, defaultMonth]);
+  }, [isOpen, editing, editingRule, initialType, initialTo, defaultYear, defaultMonth]);
 
   const handleTypeChange = (newType) => {
     setType(newType);
@@ -86,8 +128,13 @@ export default function TransactionModal({
       setFrequency('none');
       return;
     }
-    const cats = newType === 'ingreso' ? CATS_INGRESO : CATS_EGRESO;
+    const cats = getCategories(newType);
     if (!cats.includes(category)) setCategory(cats[0]);
+  };
+
+  const handleFromChange = (id) => {
+    setFrom(id);
+    if (id === to) setTo(otherThan(id));
   };
 
   const handleSubmit = async (e) => {
@@ -99,6 +146,11 @@ export default function TransactionModal({
     }
 
     const isTransfer = type === 'transferencia';
+    if (isTransfer && from === to) {
+      Swal.fire({ icon: 'warning', text: 'Elige dos cuentas distintas.', confirmButtonColor: '#6366f1' });
+      return;
+    }
+
     const entry = isTransfer
       ? {
           type,
@@ -107,7 +159,7 @@ export default function TransactionModal({
           description: description.trim(),
           date,
           from,
-          to: from === 'card' ? 'cash' : 'card',
+          to,
           affectsWallet: true,
         }
       : {
@@ -158,8 +210,8 @@ export default function TransactionModal({
 
   const isIngreso = type === 'ingreso';
   const isTransfer = type === 'transferencia';
-  const currentCats = isIngreso ? CATS_INGRESO : CATS_EGRESO;
-  const to = from === 'card' ? 'cash' : 'card';
+  const currentCats = getCategories(isIngreso ? 'ingreso' : 'egreso');
+  const methodAcc = getAccount(method);
   // Las transferencias no se repiten; un movimiento ya existente tampoco se convierte en recurrente
   const canRepeat = !isTransfer && !editing;
   const title = editingRule ? 'Editar recurrente' : editing ? 'Editar movimiento' : 'Nuevo movimiento';
@@ -225,35 +277,20 @@ export default function TransactionModal({
 
           {isTransfer ? (
             /* Origen y destino de la transferencia */
-            <div>
-              <label className="block section-title mb-2">Mover dinero</label>
-              <div className="flex items-center gap-2">
-                {[from, to].map((m, i) => {
-                  const meta = METHODS.find((x) => x.id === m);
-                  const Icon = meta.icon;
-                  return (
-                    <React.Fragment key={m}>
-                      {i === 1 && <ArrowRight className="w-5 h-5 text-slate-400 flex-shrink-0" />}
-                      <div className="flex-1 flex flex-col items-center gap-1 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{i === 0 ? 'De' : 'A'}</span>
-                        <span className="flex items-center gap-1.5 text-sm font-bold">
-                          <Icon className="w-4 h-4" />
-                          {meta.label}
-                        </span>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
+            <div className="space-y-2">
+              <div>
+                <label className="block section-title mb-1.5">De</label>
+                <AccountPicker value={from} onChange={handleFromChange} />
               </div>
-              <button
-                type="button"
-                onClick={() => setFrom(to)}
-                className="mt-2 w-full text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-              >
-                Invertir dirección
-              </button>
-              <p className="text-[11px] text-slate-400 mt-1">
-                No cuenta como gasto ni ingreso; solo mueve dinero entre tus saldos.
+              <div className="flex justify-center">
+                <ArrowDown className="w-4 h-4 text-slate-400" />
+              </div>
+              <div>
+                <label className="block section-title mb-1.5">A</label>
+                <AccountPicker value={to} onChange={setTo} exclude={from} />
+              </div>
+              <p className="text-[11px] text-slate-400">
+                No cuenta como gasto ni ingreso; solo mueve dinero entre tus cuentas. Para pagar una tarjeta de crédito, mándalo a esa tarjeta.
               </p>
             </div>
           ) : (
@@ -262,8 +299,8 @@ export default function TransactionModal({
               <label className="block section-title mb-2">Categoría</label>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {currentCats.map((c) => {
-                  const Icon = getCategoryIcon(c);
-                  const meta = CATEGORY_PALETTE[c] || CATEGORY_PALETTE['Otro'];
+                  const meta = getCategoryMeta(c);
+                  const Icon = meta.Icon;
                   const active = category === c;
                   return (
                     <button
@@ -276,13 +313,25 @@ export default function TransactionModal({
                           : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
-                      <span className={`w-7 h-7 rounded-lg border flex items-center justify-center ${meta.bg}`}>
+                      <span className={`w-7 h-7 rounded-lg border flex items-center justify-center ${meta.bg}`} style={meta.style}>
                         <Icon className="w-4 h-4" />
                       </span>
                       <span className="truncate max-w-full">{c}</span>
                     </button>
                   );
                 })}
+                {onNewCategory && (
+                  <button
+                    type="button"
+                    onClick={() => onNewCategory(isIngreso ? 'ingreso' : 'egreso', (name) => setCategory(name))}
+                    className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all"
+                  >
+                    <span className="w-7 h-7 rounded-lg flex items-center justify-center">
+                      <Plus className="w-4 h-4" />
+                    </span>
+                    Nueva
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -328,27 +377,11 @@ export default function TransactionModal({
             </div>
           )}
 
-          {/* Método de pago y ajuste de saldo */}
+          {/* Cuenta y ajuste de saldo */}
           {!isTransfer && (
             <div>
               <label className="block section-title mb-1.5">{isIngreso ? 'Recibido en' : 'Pagado con'}</label>
-              <div className="grid grid-cols-2 gap-2">
-                {METHODS.map(({ id, label, icon: Icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setMethod(id)}
-                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                      method === id
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <AccountPicker value={method} onChange={setMethod} />
               <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -357,7 +390,9 @@ export default function TransactionModal({
                   className="w-4 h-4 rounded accent-indigo-600"
                 />
                 <span className="text-xs text-slate-600 dark:text-slate-300">
-                  {isIngreso ? 'Sumar' : 'Restar'} automáticamente de mi saldo en {method === 'cash' ? 'efectivo' : 'tarjeta'}
+                  {methodAcc?.type === 'credit'
+                    ? `${isIngreso ? 'Restar de' : 'Sumar a'} la deuda de ${methodAcc.name}`
+                    : `${isIngreso ? 'Sumar a' : 'Restar de'} mi saldo en ${methodAcc?.name || 'la cuenta'}`}
                 </span>
               </label>
             </div>

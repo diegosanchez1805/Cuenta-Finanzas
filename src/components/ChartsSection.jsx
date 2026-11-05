@@ -10,7 +10,8 @@ import {
   BarElement
 } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
-import { CATEGORY_PALETTE, MESES_CORTO, money, monthKeyOf } from '../utils/formatters';
+import { MESES_CORTO, money, monthKeyOf } from '../utils/formatters';
+import { getCategoryMeta } from '../utils/registry';
 
 ChartJS.register(
   ArcElement,
@@ -39,7 +40,7 @@ export default function ChartsSection({ monthTx, allTx, viewYear, viewMonth, isD
       {
         data: catEntries.map((e) => e[1]),
         backgroundColor: catEntries.map(
-          (e) => (CATEGORY_PALETTE[e[0]] || CATEGORY_PALETTE['Otro']).color
+          (e) => getCategoryMeta(e[0]).color
         ),
         borderWidth: 2,
         borderColor: isDark ? '#111827' : '#ffffff',

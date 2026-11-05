@@ -1,13 +1,13 @@
 import React from 'react';
 import { CalendarClock, Crown, Gauge, Scale } from 'lucide-react';
-import { CATEGORY_PALETTE, daysInMonth, money, pctChange } from '../utils/formatters';
-import { getCategoryIcon } from '../utils/categoryIcons';
+import { daysInMonth, money, pctChange } from '../utils/formatters';
+import { getCategoryMeta } from '../utils/registry';
 
-function Stat({ icon: Icon, iconClass, label, value, hint }) {
+function Stat({ icon: Icon, iconClass, iconStyle, label, value, hint }) {
   return (
     <div className="card p-4 min-w-0">
       <div className="flex items-center gap-2 mb-2">
-        <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${iconClass}`}>
+        <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${iconClass}`} style={iconStyle}>
           <Icon className="w-4 h-4" />
         </span>
         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">{label}</span>
@@ -38,8 +38,8 @@ export default function InsightsSection({ monthTx, viewYear, viewMonth, prevEgre
   });
   const [topCat, topAmount] = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0] || [null, 0];
   const topPct = totalEgreso > 0 ? Math.round((topAmount / totalEgreso) * 100) : 0;
-  const TopIcon = getCategoryIcon(topCat);
-  const topMeta = CATEGORY_PALETTE[topCat] || CATEGORY_PALETTE['Otro'];
+  const topMeta = getCategoryMeta(topCat);
+  const TopIcon = topMeta.Icon;
 
   const change = pctChange(totalEgreso, prevEgreso);
 
@@ -62,6 +62,7 @@ export default function InsightsSection({ monthTx, viewYear, viewMonth, prevEgre
       <Stat
         icon={topCat ? TopIcon : Crown}
         iconClass={topCat ? `border ${topMeta.bg}` : 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'}
+        iconStyle={topCat ? topMeta.style : undefined}
         label="Mayor gasto"
         value={topCat || '—'}
         hint={topCat ? `${money(topAmount)} · ${topPct}% del total` : 'Sin gastos aún'}

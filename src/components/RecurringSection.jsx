@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Repeat, Pause, Play, Trash2, ChevronDown } from 'lucide-react';
-import { CATEGORY_PALETTE, METHOD_LABEL, money } from '../utils/formatters';
-import { getCategoryIcon } from '../utils/categoryIcons';
+import { money } from '../utils/formatters';
+import { accountLabel, getCategoryMeta } from '../utils/registry';
 import { FREQUENCY_SHORT, shortDate } from '../utils/recurring';
-import Swal from 'sweetalert2';
 
-export default function RecurringSection({ rules, onEdit, onToggle, onDelete, isDark }) {
+export default function RecurringSection({ rules, onEdit, onToggle, onDelete }) {
   const [open, setOpen] = useState(true);
 
   if (rules.length === 0) return null;
@@ -20,20 +19,8 @@ export default function RecurringSection({ rules, onEdit, onToggle, onDelete, is
     .filter((r) => r.active && r.type === 'egreso')
     .reduce((s, r) => s + r.amount * (perMonth[r.frequency] || 0), 0);
 
-  const handleDelete = (rule) => {
-    Swal.fire({
-      title: '¿Borrar recurrente?',
-      text: 'Ya no se registrará. Los movimientos que ya se crearon se quedan.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#f43f5e',
-      cancelButtonColor: isDark ? '#475569' : '#94a3b8',
-      confirmButtonText: 'Sí, borrar',
-      cancelButtonText: 'Cancelar',
-    }).then((result) => {
-      if (result.isConfirmed) onDelete(rule);
-    });
-  };
+  // Se borra al momento; App muestra un aviso con la opción de deshacer
+  const handleDelete = (rule) => onDelete(rule);
 
   return (
     <section className="card p-2 sm:p-3">
@@ -61,8 +48,8 @@ export default function RecurringSection({ rules, onEdit, onToggle, onDelete, is
       {open && (
         <div className="mt-1">
           {sorted.map((r) => {
-            const Icon = getCategoryIcon(r.category);
-            const meta = CATEGORY_PALETTE[r.category] || CATEGORY_PALETTE['Otro'];
+            const meta = getCategoryMeta(r.category);
+            const Icon = meta.Icon;
             const isIngreso = r.type === 'ingreso';
             return (
               <div
@@ -72,7 +59,7 @@ export default function RecurringSection({ rules, onEdit, onToggle, onDelete, is
                 }`}
               >
                 <button type="button" onClick={() => onEdit(r)} className="flex items-center gap-3 min-w-0 flex-1 text-left" title="Editar recurrente">
-                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${meta.bg}`}>
+                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${meta.bg}`} style={meta.style}>
                     <Icon className="w-5 h-5" />
                   </span>
                   <span className="min-w-0">
@@ -80,7 +67,7 @@ export default function RecurringSection({ rules, onEdit, onToggle, onDelete, is
                       {r.description || r.category}
                     </span>
                     <span className="block text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                      {FREQUENCY_SHORT[r.frequency]} · {METHOD_LABEL[r.method] || ''} ·{' '}
+                      {FREQUENCY_SHORT[r.frequency]} · {accountLabel(r.method)} ·{' '}
                       {r.active ? `Próximo: ${shortDate(r.nextDate)}` : 'En pausa'}
                     </span>
                   </span>

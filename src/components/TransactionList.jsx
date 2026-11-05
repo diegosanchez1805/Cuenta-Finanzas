@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
-import { Trash2, Search, Download, X, CreditCard, Banknote, ReceiptText, ChevronRight, Repeat } from 'lucide-react';
-import { CATEGORY_PALETTE, METHOD_LABEL, money, monthKeyOf, dayLabel } from '../utils/formatters';
-import { getCategoryIcon } from '../utils/categoryIcons';
+import { Trash2, Search, Download, X, ReceiptText, ChevronRight, Repeat } from 'lucide-react';
+import { money, monthKeyOf, dayLabel } from '../utils/formatters';
+import { accountLabel, accountIcon, getCategoryMeta } from '../utils/registry';
 import Swal from 'sweetalert2';
 
 function TxRow({ t, onEdit, onDelete }) {
   const isIngreso = t.type === 'ingreso';
   const isTransfer = t.type === 'transferencia';
-  const catMeta = CATEGORY_PALETTE[t.category] || CATEGORY_PALETTE['Otro'];
-  const IconComp = getCategoryIcon(t.category);
-  const MethodIcon = t.method === 'cash' ? Banknote : CreditCard;
+  const catMeta = getCategoryMeta(t.category);
+  const IconComp = catMeta.Icon;
+  const MethodIcon = accountIcon(t.method);
 
   return (
     <div className="group flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
       <button type="button" onClick={() => onEdit(t)} className="flex items-center gap-3 min-w-0 flex-1 text-left" title="Editar movimiento">
-        <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${catMeta.bg}`}>
+        <span className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${catMeta.bg}`} style={catMeta.style}>
           <IconComp className="w-5 h-5" />
         </span>
         <span className="min-w-0">
@@ -22,7 +22,7 @@ function TxRow({ t, onEdit, onDelete }) {
             {t.description || t.category}
           </span>
           <span className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            <span>{isTransfer ? `${METHOD_LABEL[t.from]} → ${METHOD_LABEL[t.to]}` : t.category}</span>
+            <span className="truncate">{isTransfer ? `${accountLabel(t.from)} → ${accountLabel(t.to)}` : t.category}</span>
             {t.recurringId && (
               <span title="Movimiento recurrente" className="inline-flex">
                 <Repeat className="w-3 h-3 text-indigo-500" />
@@ -32,7 +32,7 @@ function TxRow({ t, onEdit, onDelete }) {
               <>
                 <span className="text-slate-300 dark:text-slate-600">•</span>
                 <MethodIcon className="w-3 h-3" />
-                <span>{t.method === 'cash' ? 'Efectivo' : 'Tarjeta'}</span>
+                <span className="truncate">{accountLabel(t.method)}</span>
               </>
             )}
           </span>
@@ -100,11 +100,15 @@ export function RecentTransactions({ monthTx, onEdit, onSeeAll, onAdd }) {
   );
 }
 
-export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTransaction, onDeleteTransaction, isDark }) {
+export default function TransactionList({ monthTx, allTx, viewYear, viewMonth, onEditTransaction, onDeleteTransaction }) {
   const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'ingreso' | 'egreso'
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'ingreso' | 'egreso' | 'transferencia'
+  const [scope, setScope] = useState('month'); // 'month' | 'all': dónde buscar
 
-  const filteredTx = monthTx.filter((t) => {
+  const searching = search.trim() !== '';
+  const source = searching && scope === 'all' ? allTx : monthTx;
+
+  const filteredTx = source.filter((t) => {
     if (filterType !== 'all' && t.type !== filterType) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -134,7 +138,7 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
       return;
     }
 
-    const headers = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Método', 'Monto'];
+    const headers = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Cuenta', 'Monto'];
     const rows = monthTx
       .slice()
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
@@ -143,7 +147,7 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
         t.type === 'ingreso' ? 'Ingreso' : t.type === 'transferencia' ? 'Transferencia' : 'Gasto',
         `"${(t.category || '').replace(/"/g, '""')}"`,
         `"${(t.description || '').replace(/"/g, '""')}"`,
-        t.type === 'transferencia' ? `${METHOD_LABEL[t.from]} a ${METHOD_LABEL[t.to]}` : METHOD_LABEL[t.method] || '',
+        `"${(t.type === 'transferencia' ? `${accountLabel(t.from)} a ${accountLabel(t.to)}` : t.method ? accountLabel(t.method) : '').replace(/"/g, '""')}"`,
         t.amount || 0,
       ]);
 
@@ -169,23 +173,8 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
     });
   };
 
-  const handleDelete = (tx) => {
-    Swal.fire({
-      title: '¿Borrar movimiento?',
-      text: tx.affectsWallet ? 'También se revertirá el cambio en tus saldos.' : 'Esta acción no se puede deshacer.',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#f43f5e',
-      cancelButtonColor: isDark ? '#475569' : '#94a3b8',
-      confirmButtonText: 'Sí, borrar',
-      cancelButtonText: 'Cancelar'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        onDeleteTransaction(tx);
-        Swal.fire({ icon: 'success', title: 'Borrado', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
-      }
-    });
-  };
+  // Se borra al momento; App muestra un aviso con la opción de deshacer
+  const handleDelete = (tx) => onDeleteTransaction(tx);
 
   const filters = [
     { id: 'all', label: `Todos (${monthTx.length})`, active: 'text-slate-900 dark:text-white' },
@@ -247,11 +236,40 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
         </div>
       </div>
 
+      {searching && (
+        <div className="flex items-center justify-between gap-3 px-1 -mt-1">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {filteredTx.length} resultado{filteredTx.length === 1 ? '' : 's'}
+          </span>
+          <div className="inline-flex p-0.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs">
+            {[
+              { id: 'month', label: 'Este mes' },
+              { id: 'all', label: 'Todos los meses' },
+            ].map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => setScope(o.id)}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                  scope === o.id
+                    ? 'bg-white dark:bg-slate-800 shadow-sm text-indigo-700 dark:text-white'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {days.length === 0 ? (
         <div className="card p-10 text-center">
           <ReceiptText className="w-9 h-9 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {search.trim() ? `Sin resultados para "${search}".` : 'Aún no hay movimientos en este mes.'}
+            {searching
+              ? `Sin resultados para "${search}"${scope === 'month' ? ' en este mes. Prueba en "Todos los meses".' : '.'}`
+              : 'Aún no hay movimientos en este mes.'}
           </p>
         </div>
       ) : (
@@ -266,10 +284,13 @@ export default function TransactionList({ monthTx, viewYear, viewMonth, onEditTr
               <section key={day} className="card p-2 sm:p-3">
                 <div className="flex items-center justify-between px-3 pt-1 pb-2">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400 first-letter:uppercase">{dayLabel(day)}</span>
-                  <span className={`font-mono text-xs font-bold ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {net >= 0 ? '+' : '−'}
-                    {money(Math.abs(net))}
-                  </span>
+                  {/* Un día con solo transferencias no tiene total que mostrar */}
+                  {items.some((t) => t.type !== 'transferencia') && (
+                    <span className={`font-mono text-xs font-bold ${net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      {net >= 0 ? '+' : '−'}
+                      {money(Math.abs(net))}
+                    </span>
+                  )}
                 </div>
                 {items.map((t) => (
                   <TxRow key={t.id} t={t} onEdit={onEditTransaction} onDelete={handleDelete} />

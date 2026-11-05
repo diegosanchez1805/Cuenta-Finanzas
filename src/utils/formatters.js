@@ -50,8 +50,6 @@ export const monthKeyOf = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 
 export const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
 
-export const METHOD_LABEL = { card: "Tarjeta", cash: "Efectivo" };
-
 export const sumBy = (txs, type) =>
   txs.filter((t) => t.type === type).reduce((s, t) => s + (t.amount || 0), 0);
 
@@ -79,7 +77,9 @@ export function dayLabel(iso) {
   if (iso === today) return "Hoy";
   if (iso === yestISO) return "Ayer";
   const dow = DIAS[new Date(y, m - 1, d).getDay()];
-  return `${dow} ${d} de ${MESES[m - 1].toLowerCase()}`;
+  // El año solo se muestra si no es el actual (útil al buscar en todos los meses)
+  const year = y !== new Date().getFullYear() ? ` de ${y}` : "";
+  return `${dow} ${d} de ${MESES[m - 1].toLowerCase()}${year}`;
 }
 
 export function traducirError(code) {

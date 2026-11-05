@@ -14,11 +14,14 @@ import {
   setDoc,
   writeBatch,
   increment,
-  runTransaction
+  runTransaction,
+  deleteField
 } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
 import { sumBy, txOfMonth, prevMonthOf, setHideAmounts, todayISO } from './utils/formatters';
 import { nextOccurrence, alignBiweekly } from './utils/recurring';
+import { setAccounts, setCustomCategories, getAccounts, getAccount, DEFAULT_ACCOUNTS } from './utils/registry';
+import useOnline from './hooks/useOnline';
 import Swal from 'sweetalert2';
 
 // Componentes
@@ -32,29 +35,40 @@ import InsightsSection from './components/InsightsSection';
 import ChartsSection from './components/ChartsSection';
 import TransactionList, { RecentTransactions } from './components/TransactionList';
 import BudgetsSection, { BudgetAlerts } from './components/BudgetsSection';
+import CategoriesSection from './components/CategoriesSection';
 import SavingsSection from './components/SavingsSection';
+import DebtsSection from './components/DebtsSection';
 import RecurringSection from './components/RecurringSection';
+import OfflineBanner from './components/OfflineBanner';
+import UndoToast from './components/UndoToast';
 import Logo from './components/Logo';
 
 // Modales
 import TransactionModal from './modals/TransactionModal';
-import WalletModal from './modals/WalletModal';
+import AccountModal from './modals/AccountModal';
+import CategoryModal from './modals/CategoryModal';
 import GoalModal from './modals/GoalModal';
 import DepositModal from './modals/DepositModal';
+import DebtModal from './modals/DebtModal';
+import DebtPaymentModal from './modals/DebtPaymentModal';
 import ProfileModal from './modals/ProfileModal';
 import BudgetModal from './modals/BudgetModal';
 
 // Iconos
-import { LayoutDashboard, ReceiptText, Gauge, PiggyBank, Plus } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Gauge, PiggyBank, HandCoins, Plus } from 'lucide-react';
 
 const TABS = [
   { id: 'resumen', label: 'Resumen', icon: LayoutDashboard },
   { id: 'movimientos', label: 'Movimientos', icon: ReceiptText },
   { id: 'presupuestos', label: 'Presupuestos', icon: Gauge },
   { id: 'ahorros', label: 'Metas', icon: PiggyBank },
+  { id: 'deudas', label: 'Deudas', icon: HandCoins },
 ];
 
-// Efecto de un movimiento sobre los saldos: { card: +x } / { cash: -y }
+// Pestañas que no dependen del mes seleccionado
+const TABS_WITHOUT_MONTH = ['ahorros', 'deudas'];
+
+// Efecto de un movimiento sobre los saldos: { [cuenta]: +x }
 function walletEffect(tx, sign = 1) {
   if (!tx) return {};
   if (tx.type === 'transferencia') {
@@ -95,9 +109,22 @@ function mergeEffects(...effects) {
   return out;
 }
 
+// Sin conexión, Firestore guarda el cambio en el celular y la promesa no termina hasta
+// sincronizar; en ese caso no hacemos esperar a la pantalla.
+const settle = (promise) => {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    promise.catch(() => {});
+    return Promise.resolve();
+  }
+  return promise;
+};
+
+const stripId = ({ id, ...rest }) => rest;
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const online = useOnline();
 
   // Estados de datos
   const [allTx, setAllTx] = useState([]);
@@ -105,6 +132,13 @@ export default function App() {
   const [wallets, setWallets] = useState({ card: 0, cash: 0 });
   const [budgets, setBudgets] = useState({});
   const [recurring, setRecurring] = useState([]);
+  const [accountsList, setAccountsList] = useState(DEFAULT_ACCOUNTS);
+  const [customCats, setCustomCats] = useState([]);
+  const [debts, setDebts] = useState([]);
+
+  // Cuentas y categorías disponibles para todos los componentes de este render
+  setAccounts(accountsList);
+  setCustomCategories(customCats);
 
   // Navegación temporal y pestañas
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
@@ -124,7 +158,7 @@ export default function App() {
 
   // Tema: 'dark' | 'light' (por defecto 'dark', persistido en localStorage)
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'dark';
+    return readStorage('theme') || 'dark';
   });
 
   const isDark = theme === 'dark';
@@ -150,16 +184,23 @@ export default function App() {
     });
   };
 
+  // Aviso con "Deshacer" tras borrar algo
+  const [undoToast, setUndoToast] = useState(null);
+  const showUndo = (message, undo) => setUndoToast({ id: Date.now(), message, undo });
+
   // Estados de modales
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState(null);
   const [editingRule, setEditingRule] = useState(null);
   const [txInitialType, setTxInitialType] = useState('egreso');
-  const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
-  const [walletModalType, setWalletModalType] = useState('card');
-  const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+  const [txInitialTo, setTxInitialTo] = useState(null);
+  const [accountModal, setAccountModal] = useState({ open: false, id: null });
+  const [categoryModal, setCategoryModal] = useState({ open: false, category: null, type: 'egreso', onCreated: null });
+  const [goalModal, setGoalModal] = useState({ open: false, goal: null });
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState(null);
+  const [debtModal, setDebtModal] = useState({ open: false, debt: null });
+  const [payingDebt, setPayingDebt] = useState(null);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [budgetCategory, setBudgetCategory] = useState(null);
 
@@ -169,7 +210,7 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
-    localStorage.setItem('theme', theme);
+    writeStorage('theme', theme);
 
     // Sincronizar color de la barra del navegador móvil
     let metaThemeColor = document.querySelector('meta[name="theme-color"]');
@@ -181,10 +222,11 @@ export default function App() {
     metaThemeColor.setAttribute('content', theme === 'dark' ? '#0b0f19' : '#f5f6fa');
   }, [theme]);
 
-  const openNewTx = (type = 'egreso') => {
+  const openNewTx = (type = 'egreso', to = null) => {
     setEditingTx(null);
     setEditingRule(null);
     setTxInitialType(type);
+    setTxInitialTo(to);
     setIsTxModalOpen(true);
   };
 
@@ -193,9 +235,12 @@ export default function App() {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setIsTxModalOpen(false);
-        setIsWalletModalOpen(false);
-        setIsGoalModalOpen(false);
+        setAccountModal({ open: false, id: null });
+        setCategoryModal((m) => ({ ...m, open: false }));
+        setGoalModal({ open: false, goal: null });
         setIsDepositModalOpen(false);
+        setDebtModal({ open: false, debt: null });
+        setPayingDebt(null);
         setIsBudgetModalOpen(false);
         setIsProfileModalOpen(false);
         return;
@@ -293,66 +338,70 @@ export default function App() {
       setWallets({ card: 0, cash: 0 });
       setBudgets({});
       setRecurring([]);
+      setAccountsList(DEFAULT_ACCOUNTS);
+      setCustomCats([]);
+      setDebts([]);
       return;
     }
 
-    // 1. Transacciones
-    const txColRef = collection(db, 'users', currentUser.uid, 'transactions');
-    const unsubscribeTx = onSnapshot(txColRef, (snapshot) => {
-      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setAllTx(docs);
-    });
+    const uid = currentUser.uid;
+    const listCol = (name, setter) =>
+      onSnapshot(
+        collection(db, 'users', uid, name),
+        (snapshot) => setter(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))),
+        () => setter([])
+      );
 
-    // 2. Metas de ahorro
-    const savingsColRef = collection(db, 'users', currentUser.uid, 'savings');
-    const unsubscribeSavings = onSnapshot(savingsColRef, (snapshot) => {
-      const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setSavingsGoals(docs);
-    });
+    const unsubs = [
+      // Movimientos, metas, recurrentes y deudas
+      listCol('transactions', setAllTx),
+      listCol('savings', setSavingsGoals),
+      listCol('recurring', setRecurring),
+      listCol('debts', setDebts),
 
-    // 3. Saldos de dinero (Tarjeta y Efectivo)
-    const walletDocRef = doc(db, 'users', currentUser.uid, 'wallets', 'current');
-    const unsubscribeWallets = onSnapshot(walletDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setWallets({
-          card: Number(data.card) || 0,
-          cash: Number(data.cash) || 0,
+      // Saldos por cuenta: { [idCuenta]: saldo }
+      onSnapshot(doc(db, 'users', uid, 'wallets', 'current'), (docSnap) => {
+        const data = docSnap.exists() ? docSnap.data() : {};
+        const balances = { card: 0, cash: 0 };
+        Object.entries(data).forEach(([k, v]) => {
+          balances[k] = Number(v) || 0;
         });
-      } else {
-        setWallets({ card: 0, cash: 0 });
-      }
-    });
+        setWallets(balances);
+      }),
 
-    // 4. Presupuestos por categoría
-    const budgetsDocRef = doc(db, 'users', currentUser.uid, 'settings', 'budgets');
-    const unsubscribeBudgets = onSnapshot(
-      budgetsDocRef,
-      (docSnap) => setBudgets(docSnap.exists() ? docSnap.data().limits || {} : {}),
-      () => setBudgets({})
-    );
+      // Presupuestos por categoría
+      onSnapshot(
+        doc(db, 'users', uid, 'settings', 'budgets'),
+        (docSnap) => setBudgets(docSnap.exists() ? docSnap.data().limits || {} : {}),
+        () => setBudgets({})
+      ),
 
-    // 5. Movimientos recurrentes
-    const recurringColRef = collection(db, 'users', currentUser.uid, 'recurring');
-    const unsubscribeRecurring = onSnapshot(
-      recurringColRef,
-      (snapshot) => setRecurring(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      () => setRecurring([])
-    );
+      // Cuentas (si nunca se han editado, se usan Tarjeta y Efectivo)
+      onSnapshot(
+        doc(db, 'users', uid, 'settings', 'accounts'),
+        (docSnap) => {
+          const items = docSnap.exists() ? docSnap.data().items : null;
+          setAccountsList(items && items.length ? items : DEFAULT_ACCOUNTS);
+        },
+        () => setAccountsList(DEFAULT_ACCOUNTS)
+      ),
 
-    return () => {
-      unsubscribeTx();
-      unsubscribeSavings();
-      unsubscribeWallets();
-      unsubscribeBudgets();
-      unsubscribeRecurring();
-    };
+      // Categorías personalizadas
+      onSnapshot(
+        doc(db, 'users', uid, 'settings', 'categories'),
+        (docSnap) => setCustomCats(docSnap.exists() ? docSnap.data().items || [] : []),
+        () => setCustomCats([])
+      ),
+    ];
+
+    return () => unsubs.forEach((u) => u());
   }, [currentUser]);
 
   // Registra los movimientos recurrentes que ya vencieron. Se hace en una transacción
   // que vuelve a leer la regla, así otro dispositivo abierto no los duplica.
+  // Las transacciones necesitan internet: al reconectar se vuelve a intentar.
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !online) return;
     const uid = currentUser.uid;
     const today = todayISO();
     const due = recurring.filter((r) => r.active && r.nextDate && r.nextDate <= today);
@@ -393,7 +442,7 @@ export default function App() {
         t.update(rRef, { nextDate: next });
       }).catch(() => {});
     });
-  }, [currentUser, recurring]);
+  }, [currentUser, recurring, online]);
 
   // Cambiar de mes
   const handleChangeMonth = (delta) => {
@@ -417,7 +466,9 @@ export default function App() {
   };
 
   // Operaciones de Firestore
-  const walletRef = () => doc(db, 'users', currentUser.uid, 'wallets', 'current');
+  const userDoc = (...path) => doc(db, 'users', currentUser.uid, ...path);
+  const userCol = (name) => collection(db, 'users', currentUser.uid, name);
+  const walletRef = () => userDoc('wallets', 'current');
 
   // Aplica el cambio de saldo dentro del mismo lote o transacción para que sea atómico
   const addWalletEffect = (writer, effect) => {
@@ -428,7 +479,7 @@ export default function App() {
     if (Object.keys(update).length) writer.set(walletRef(), update, { merge: true });
   };
 
-  const ruleRef = (id) => doc(db, 'users', currentUser.uid, 'recurring', id);
+  const ruleRef = (id) => userDoc('recurring', id);
 
   const ruleFromEntry = (entry, frequency) => {
     const { date, ...rest } = entry;
@@ -440,41 +491,52 @@ export default function App() {
     };
   };
 
+  /* ---------- Movimientos ---------- */
+
   const handleSaveTransaction = async (entry, frequency = 'none') => {
     if (!currentUser) return;
 
     if (editingRule) {
-      await updateDoc(ruleRef(editingRule.id), ruleFromEntry(entry, frequency));
+      await settle(updateDoc(ruleRef(editingRule.id), ruleFromEntry(entry, frequency)));
       return;
     }
     if (!editingTx && frequency !== 'none') {
-      await addDoc(collection(db, 'users', currentUser.uid, 'recurring'), {
-        ...ruleFromEntry(entry, frequency),
-        active: true,
-        createdAt: Date.now(),
-      });
+      await settle(
+        addDoc(userCol('recurring'), {
+          ...ruleFromEntry(entry, frequency),
+          active: true,
+          createdAt: Date.now(),
+        })
+      );
       return;
     }
 
     const batch = writeBatch(db);
     if (editingTx) {
-      const ref = doc(db, 'users', currentUser.uid, 'transactions', editingTx.id);
-      batch.update(ref, entry);
+      batch.update(userDoc('transactions', editingTx.id), entry);
       addWalletEffect(batch, mergeEffects(walletEffect(editingTx, -1), walletEffect(entry)));
     } else {
-      const ref = doc(collection(db, 'users', currentUser.uid, 'transactions'));
-      batch.set(ref, { ...entry, createdAt: Date.now() });
+      batch.set(doc(userCol('transactions')), { ...entry, createdAt: Date.now() });
       addWalletEffect(batch, walletEffect(entry));
     }
-    await batch.commit();
+    await settle(batch.commit());
+  };
+
+  // Restaurar un movimiento borrado con el mismo id y volver a aplicar su efecto en los saldos
+  const restoreTransaction = (tx) => {
+    const batch = writeBatch(db);
+    batch.set(userDoc('transactions', tx.id), stripId(tx));
+    addWalletEffect(batch, walletEffect(tx));
+    settle(batch.commit()).catch(() => {});
   };
 
   const handleDeleteTransaction = async (tx) => {
     if (!currentUser) return;
     const batch = writeBatch(db);
-    batch.delete(doc(db, 'users', currentUser.uid, 'transactions', tx.id));
+    batch.delete(userDoc('transactions', tx.id));
     addWalletEffect(batch, walletEffect(tx, -1));
-    await batch.commit();
+    showUndo(`Se borró "${tx.description || tx.category}"`, () => restoreTransaction(tx));
+    await settle(batch.commit());
   };
 
   const handleEditTransaction = (tx) => {
@@ -482,6 +544,8 @@ export default function App() {
     setEditingTx(tx);
     setIsTxModalOpen(true);
   };
+
+  /* ---------- Recurrentes ---------- */
 
   const handleEditRule = (rule) => {
     setEditingTx(null);
@@ -493,7 +557,7 @@ export default function App() {
   const handleToggleRule = async (rule) => {
     if (!currentUser) return;
     if (rule.active) {
-      await updateDoc(ruleRef(rule.id), { active: false });
+      await settle(updateDoc(ruleRef(rule.id), { active: false }));
       return;
     }
     const today = todayISO();
@@ -501,25 +565,90 @@ export default function App() {
     for (let i = 0; next && next < today && i < 1000; i++) {
       next = nextOccurrence(next, rule.frequency, rule.day);
     }
-    await updateDoc(ruleRef(rule.id), { active: true, nextDate: next });
+    await settle(updateDoc(ruleRef(rule.id), { active: true, nextDate: next }));
   };
 
   const handleDeleteRule = async (rule) => {
     if (!currentUser) return;
-    await deleteDoc(ruleRef(rule.id));
+    showUndo(`Se borró el recurrente "${rule.description || rule.category}"`, () => {
+      settle(setDoc(ruleRef(rule.id), stripId(rule))).catch(() => {});
+    });
+    await settle(deleteDoc(ruleRef(rule.id)));
   };
 
-  const handleSaveWallet = async (type, amount) => {
+  /* ---------- Cuentas ---------- */
+
+  const handleSaveAccount = async (data, balance) => {
     if (!currentUser) return;
-    await setDoc(walletRef(), { [type]: amount }, { merge: true });
+    const editingId = accountModal.id;
+    const id = editingId || `acc_${Date.now().toString(36)}`;
+    const items = editingId
+      ? accountsList.map((a) => (a.id === editingId ? { ...a, ...data } : a))
+      : [...accountsList, { id, ...data }];
+
+    const batch = writeBatch(db);
+    batch.set(userDoc('settings', 'accounts'), { items });
+    batch.set(walletRef(), { [id]: balance }, { merge: true });
+    await settle(batch.commit());
   };
+
+  const handleDeleteAccount = async (account) => {
+    if (!currentUser) return;
+    const batch = writeBatch(db);
+    batch.set(userDoc('settings', 'accounts'), { items: accountsList.filter((a) => a.id !== account.id) });
+    batch.set(walletRef(), { [account.id]: deleteField() }, { merge: true });
+    await settle(batch.commit());
+  };
+
+  /* ---------- Categorías ---------- */
+
+  const openCategoryModal = (category = null, type = 'egreso', onCreated = null) =>
+    setCategoryModal({ open: true, category, type, onCreated });
+
+  const handleSaveCategory = async (data, original) => {
+    if (!currentUser) return;
+    const items = original
+      ? customCats.map((c) => (c.name === original.name ? data : c))
+      : [...customCats, data];
+
+    // Si cambió el nombre, se actualiza donde ya se usaba (en lotes de hasta 450 escrituras)
+    const writes = [(b) => b.set(userDoc('settings', 'categories'), { items })];
+    if (original && original.name !== data.name) {
+      allTx
+        .filter((t) => t.category === original.name)
+        .forEach((t) => writes.push((b) => b.update(userDoc('transactions', t.id), { category: data.name })));
+      recurring
+        .filter((r) => r.category === original.name)
+        .forEach((r) => writes.push((b) => b.update(ruleRef(r.id), { category: data.name })));
+      if (budgets[original.name]) {
+        const limits = { ...budgets, [data.name]: budgets[original.name] };
+        delete limits[original.name];
+        writes.push((b) => b.set(userDoc('settings', 'budgets'), { limits }));
+      }
+    }
+
+    const commits = [];
+    for (let i = 0; i < writes.length; i += 450) {
+      const batch = writeBatch(db);
+      writes.slice(i, i + 450).forEach((w) => w(batch));
+      commits.push(batch.commit());
+    }
+    await settle(Promise.all(commits));
+  };
+
+  const handleDeleteCategory = async (category) => {
+    if (!currentUser) return;
+    await settle(setDoc(userDoc('settings', 'categories'), { items: customCats.filter((c) => c.name !== category.name) }));
+  };
+
+  /* ---------- Presupuestos ---------- */
 
   const handleSaveBudget = async (category, amount) => {
     if (!currentUser) return;
     const next = { ...budgets };
     if (amount > 0) next[category] = amount;
     else delete next[category];
-    await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'budgets'), { limits: next });
+    await settle(setDoc(userDoc('settings', 'budgets'), { limits: next }));
   };
 
   const handleOpenBudgetModal = (category) => {
@@ -527,28 +656,30 @@ export default function App() {
     setIsBudgetModalOpen(true);
   };
 
-  const handleAddGoal = async (goal) => {
+  /* ---------- Metas ---------- */
+
+  const handleSaveGoal = async (data, goal) => {
     if (!currentUser) return;
-    const colRef = collection(db, 'users', currentUser.uid, 'savings');
-    await addDoc(colRef, goal);
+    if (goal) await settle(updateDoc(userDoc('savings', goal.id), data));
+    else await settle(addDoc(userCol('savings'), data));
   };
 
-  // Borrar una meta; returnTo ('card' | 'cash') regresa lo ahorrado a ese saldo
+  // Borrar una meta; returnTo (id de cuenta) regresa lo ahorrado a ese saldo
   const handleDeleteGoal = async (goal, returnTo) => {
     if (!currentUser) return;
     const batch = writeBatch(db);
-    batch.delete(doc(db, 'users', currentUser.uid, 'savings', goal.id));
+    batch.delete(userDoc('savings', goal.id));
     if (returnTo) addWalletEffect(batch, { [returnTo]: goal.saved || 0 });
-    await batch.commit();
+    await settle(batch.commit());
   };
 
-  // walletDelta mueve el dinero entre la meta y la tarjeta o el efectivo
+  // walletDelta mueve el dinero entre la meta y una cuenta
   const handleUpdateGoalAmount = async (id, newSaved, walletDelta) => {
     if (!currentUser) return;
     const batch = writeBatch(db);
-    batch.update(doc(db, 'users', currentUser.uid, 'savings', id), { saved: newSaved });
+    batch.update(userDoc('savings', id), { saved: newSaved });
     if (walletDelta) addWalletEffect(batch, walletDelta);
-    await batch.commit();
+    await settle(batch.commit());
   };
 
   const handleOpenDepositModal = (goal) => {
@@ -556,9 +687,35 @@ export default function App() {
     setIsDepositModalOpen(true);
   };
 
-  const handleOpenWalletModal = (type = 'card') => {
-    setWalletModalType(type);
-    setIsWalletModalOpen(true);
+  /* ---------- Deudas ---------- */
+
+  // accountId: cuenta por la que pasó el dinero al pedir (entra) o hacer (sale) el préstamo
+  const handleSaveDebt = async (data, debt, accountId) => {
+    if (!currentUser) return;
+    if (debt) {
+      await settle(updateDoc(userDoc('debts', debt.id), data));
+      return;
+    }
+    const batch = writeBatch(db);
+    batch.set(doc(userCol('debts')), { ...data, paid: 0, createdAt: Date.now() });
+    if (accountId) addWalletEffect(batch, { [accountId]: data.direction === 'owe' ? data.total : -data.total });
+    await settle(batch.commit());
+  };
+
+  const handlePayDebt = async (debt, amount, accountId) => {
+    if (!currentUser) return;
+    const batch = writeBatch(db);
+    batch.update(userDoc('debts', debt.id), { paid: increment(amount) });
+    if (accountId) addWalletEffect(batch, { [accountId]: debt.direction === 'owe' ? -amount : amount });
+    await settle(batch.commit());
+  };
+
+  const handleDeleteDebt = async (debt) => {
+    if (!currentUser) return;
+    showUndo(`Se borró la deuda con ${debt.name}`, () => {
+      settle(setDoc(userDoc('debts', debt.id), stripId(debt))).catch(() => {});
+    });
+    await settle(deleteDoc(userDoc('debts', debt.id)));
   };
 
   // Cálculos reactivos para el mes seleccionado y el anterior
@@ -586,11 +743,12 @@ export default function App() {
     const h = new Date().getHours();
     return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
   })();
-  const showMonth = activeTab !== 'ahorros';
+  const showMonth = !TABS_WITHOUT_MONTH.includes(activeTab);
   const activeLabel = TABS.find((t) => t.id === activeTab)?.label;
+  const editingAccount = accountModal.id ? getAccount(accountModal.id) : null;
 
   return (
-    <div className="min-h-screen pb-28 md:pb-16 bg-[#f5f6fa] dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white transition-colors duration-150">
+    <div className="min-h-screen pb-40 lg:pb-16 bg-[#f5f6fa] dark:bg-[#0b0f19] text-slate-900 dark:text-slate-100 selection:bg-indigo-500 selection:text-white transition-colors duration-150">
       <Header
         onLogout={() => signOut(auth)}
         theme={theme}
@@ -603,6 +761,8 @@ export default function App() {
         activeTab={activeTab}
         onChangeTab={goToTab}
       />
+
+      <OfflineBanner online={online} />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
         {/* Encabezado de página con selector de mes */}
@@ -628,7 +788,11 @@ export default function App() {
         <div
           key={activeTab}
           className={`${tabDirection === 'left' ? 'tab-enter-left' : 'tab-enter-right'} ${
-            activeTab === 'resumen' ? 'space-y-5' : activeTab === 'movimientos' ? 'max-w-3xl space-y-4' : ''
+            activeTab === 'resumen' || activeTab === 'presupuestos'
+              ? 'space-y-5'
+              : activeTab === 'movimientos'
+              ? 'max-w-3xl space-y-4'
+              : ''
           }`}
         >
         {/* Vista: Resumen */}
@@ -646,8 +810,10 @@ export default function App() {
               </div>
               <WalletsSection
                 wallets={wallets}
-                onOpenWalletModal={handleOpenWalletModal}
+                onEditAccount={(id) => setAccountModal({ open: true, id })}
+                onNewAccount={() => setAccountModal({ open: true, id: null })}
                 onTransfer={() => openNewTx('transferencia')}
+                onPayCard={(id) => openNewTx('transferencia', id)}
               />
             </div>
 
@@ -679,49 +845,72 @@ export default function App() {
               onEdit={handleEditRule}
               onToggle={handleToggleRule}
               onDelete={handleDeleteRule}
-              isDark={isDark}
             />
             <TransactionList
               monthTx={monthTx}
+              allTx={allTx}
               viewYear={viewYear}
               viewMonth={viewMonth}
               onEditTransaction={handleEditTransaction}
               onDeleteTransaction={handleDeleteTransaction}
-              isDark={isDark}
             />
           </>
         )}
 
-        {/* Vista: Presupuestos */}
+        {/* Vista: Presupuestos y categorías */}
         {activeTab === 'presupuestos' && (
-          <BudgetsSection budgets={budgets} monthTx={monthTx} onEditBudget={handleOpenBudgetModal} />
+          <>
+            <BudgetsSection budgets={budgets} monthTx={monthTx} onEditBudget={handleOpenBudgetModal} />
+            <CategoriesSection onEdit={(c) => openCategoryModal(c, c.type)} onNew={() => openCategoryModal(null, 'egreso')} />
+          </>
         )}
 
         {/* Vista: Metas de Ahorro */}
         {activeTab === 'ahorros' && (
           <SavingsSection
             savingsGoals={savingsGoals}
-            onOpenNewGoalModal={() => setIsGoalModalOpen(true)}
+            onOpenNewGoalModal={() => setGoalModal({ open: true, goal: null })}
             onOpenDepositModal={handleOpenDepositModal}
+            onEditGoal={(goal) => setGoalModal({ open: true, goal })}
             onDeleteGoal={handleDeleteGoal}
             isDark={isDark}
+          />
+        )}
+
+        {/* Vista: Deudas y préstamos */}
+        {activeTab === 'deudas' && (
+          <DebtsSection
+            debts={debts}
+            onNew={() => setDebtModal({ open: true, debt: null })}
+            onPay={(debt) => setPayingDebt(debt)}
+            onEdit={(debt) => setDebtModal({ open: true, debt })}
+            onDelete={handleDeleteDebt}
           />
         )}
         </div>
       </main>
 
-      {/* Botón Flotante (solo escritorio; en móvil está en la barra inferior) */}
+      {/* Botón flotante de nuevo movimiento (en celular, arriba de la barra inferior) */}
       <button
         onClick={() => openNewTx()}
         type="button"
-        className="hidden md:flex fixed bottom-6 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center justify-center shadow-2xl shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
+        className="fab-pos flex fixed w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center justify-center shadow-2xl shadow-indigo-600/40 hover:scale-105 active:scale-95 transition-all duration-200 z-40 focus:outline-none focus:ring-4 focus:ring-indigo-400/40"
         aria-label="Registrar nuevo movimiento (tecla N)"
         title="Nuevo movimiento (Atajo: tecla 'N')"
       >
         <Plus className="w-7 h-7 stroke-[2.5]" />
       </button>
 
-      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={goToTab} onAdd={() => openNewTx()} />
+      <BottomNav tabs={TABS} activeTab={activeTab} onChangeTab={goToTab} />
+
+      <UndoToast
+        toast={undoToast}
+        onUndo={() => {
+          undoToast?.undo();
+          setUndoToast(null);
+        }}
+        onClose={() => setUndoToast(null)}
+      />
 
       {/* Modales */}
       <TransactionModal
@@ -729,22 +918,41 @@ export default function App() {
         editing={editingTx}
         editingRule={editingRule}
         initialType={txInitialType}
+        initialTo={txInitialTo}
+        onNewCategory={(type, onCreated) => openCategoryModal(null, type, onCreated)}
         onClose={() => {
           setIsTxModalOpen(false);
           setEditingTx(null);
           setEditingRule(null);
+          setTxInitialTo(null);
         }}
         onSave={handleSaveTransaction}
         defaultYear={viewYear}
         defaultMonth={viewMonth}
       />
 
-      <WalletModal
-        isOpen={isWalletModalOpen}
-        initialType={walletModalType}
-        wallets={wallets}
-        onClose={() => setIsWalletModalOpen(false)}
-        onSave={handleSaveWallet}
+      <AccountModal
+        isOpen={accountModal.open}
+        account={editingAccount}
+        balance={editingAccount ? wallets[editingAccount.id] || 0 : 0}
+        canDelete={getAccounts().length > 1}
+        onClose={() => setAccountModal({ open: false, id: null })}
+        onSave={handleSaveAccount}
+        onDelete={handleDeleteAccount}
+        isDark={isDark}
+      />
+
+      <CategoryModal
+        isOpen={categoryModal.open}
+        category={categoryModal.category}
+        initialType={categoryModal.type}
+        onClose={(createdName) => {
+          if (createdName && !categoryModal.category && categoryModal.onCreated) categoryModal.onCreated(createdName);
+          setCategoryModal({ open: false, category: null, type: 'egreso', onCreated: null });
+        }}
+        onSave={handleSaveCategory}
+        onDelete={handleDeleteCategory}
+        isDark={isDark}
       />
 
       <BudgetModal
@@ -756,9 +964,10 @@ export default function App() {
       />
 
       <GoalModal
-        isOpen={isGoalModalOpen}
-        onClose={() => setIsGoalModalOpen(false)}
-        onSave={handleAddGoal}
+        isOpen={goalModal.open}
+        goal={goalModal.goal}
+        onClose={() => setGoalModal({ open: false, goal: null })}
+        onSave={handleSaveGoal}
       />
 
       <ProfileModal
@@ -777,6 +986,21 @@ export default function App() {
           setSelectedGoal(null);
         }}
         onSave={handleUpdateGoalAmount}
+      />
+
+      <DebtModal
+        isOpen={debtModal.open}
+        debt={debtModal.debt}
+        onClose={() => setDebtModal({ open: false, debt: null })}
+        onSave={handleSaveDebt}
+      />
+
+      <DebtPaymentModal
+        isOpen={!!payingDebt}
+        debt={payingDebt}
+        wallets={wallets}
+        onClose={() => setPayingDebt(null)}
+        onSave={handlePayDebt}
       />
     </div>
   );

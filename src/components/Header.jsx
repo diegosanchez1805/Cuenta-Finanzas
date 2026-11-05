@@ -55,7 +55,7 @@ export default function Header({ onLogout, theme, onToggleTheme, displayName, on
         </div>
 
         {/* Navegación de escritorio (en móvil se usa la barra inferior) */}
-        <nav ref={navRef} className="hidden md:flex relative items-center gap-1 p-1 rounded-2xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+        <nav ref={navRef} className="hidden lg:flex relative items-center gap-1 p-1 rounded-2xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
           {/* Fondo que se desliza hacia la pestaña activa */}
           <span
             aria-hidden="true"

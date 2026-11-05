@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Gauge, X, Loader2, Trash2 } from 'lucide-react';
-import { CATS_EGRESO, money } from '../utils/formatters';
+import { money } from '../utils/formatters';
+import { getCategories } from '../utils/registry';
 import Swal from 'sweetalert2';
 
 export default function BudgetModal({ isOpen, initialCategory, budgets, onClose, onSave }) {
-  const [category, setCategory] = useState(CATS_EGRESO[0]);
+  const [category, setCategory] = useState('Comida');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      const cat = initialCategory || CATS_EGRESO[0];
+      const cat = initialCategory || getCategories('egreso')[0];
       setCategory(cat);
       setAmount(budgets[cat] ? String(budgets[cat]) : '');
       setSaving(false);
@@ -79,7 +80,7 @@ export default function BudgetModal({ isOpen, initialCategory, budgets, onClose,
           <div>
             <label className="block section-title mb-1">Categoría</label>
             <select value={category} onChange={(e) => handleCategoryChange(e.target.value)} className="input font-medium">
-              {CATS_EGRESO.map((c) => (
+              {getCategories('egreso').map((c) => (
                 <option key={c} value={c} className="bg-white dark:bg-slate-900">
                   {c}
                   {budgets[c] > 0 ? ` (${money(budgets[c])})` : ''}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Gauge, Plus, Pencil, AlertTriangle } from 'lucide-react';
-import { CATS_EGRESO, CATEGORY_PALETTE, money } from '../utils/formatters';
-import { getCategoryIcon } from '../utils/categoryIcons';
+import { money } from '../utils/formatters';
+import { getCategories, getCategoryMeta } from '../utils/registry';
 
 export function budgetStatus(spent, limit) {
   const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
@@ -54,8 +54,10 @@ export function BudgetAlerts({ budgets, monthTx, onOpen }) {
 
 export default function BudgetsSection({ budgets, monthTx, onEditBudget }) {
   const spent = spentByCategory(monthTx);
-  const withBudget = CATS_EGRESO.filter((c) => budgets[c] > 0);
-  const withoutBudget = CATS_EGRESO.filter((c) => !(budgets[c] > 0));
+  const cats = getCategories('egreso');
+  // También se muestran presupuestos de categorías que ya no existen, para poder quitarlos
+  const withBudget = [...cats, ...Object.keys(budgets).filter((c) => !cats.includes(c))].filter((c) => budgets[c] > 0);
+  const withoutBudget = cats.filter((c) => !(budgets[c] > 0));
 
   const totalLimit = withBudget.reduce((s, c) => s + budgets[c], 0);
   const totalSpent = withBudget.reduce((s, c) => s + (spent[c] || 0), 0);
@@ -74,7 +76,7 @@ export default function BudgetsSection({ budgets, monthTx, onEditBudget }) {
             Define cuánto quieres gastar por categoría y recibe avisos al acercarte al límite.
           </p>
         </div>
-        <button onClick={() => onEditBudget(withoutBudget[0] || CATS_EGRESO[0])} type="button" className="btn-primary !text-xs">
+        <button onClick={() => onEditBudget(withoutBudget[0] || cats[0])} type="button" className="btn-primary !text-xs">
           <Plus className="w-4 h-4" />
           Nuevo presupuesto
         </button>
@@ -116,8 +118,8 @@ export default function BudgetsSection({ budgets, monthTx, onEditBudget }) {
             const limit = budgets[cat];
             const s = spent[cat] || 0;
             const st = budgetStatus(s, limit);
-            const Icon = getCategoryIcon(cat);
-            const meta = CATEGORY_PALETTE[cat] || CATEGORY_PALETTE['Otro'];
+            const meta = getCategoryMeta(cat);
+            const Icon = meta.Icon;
             return (
               <button
                 key={cat}
@@ -127,7 +129,7 @@ export default function BudgetsSection({ budgets, monthTx, onEditBudget }) {
               >
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <span className="flex items-center gap-2.5 min-w-0">
-                    <span className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                    <span className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${meta.bg}`} style={meta.style}>
                       <Icon className="w-[18px] h-[18px]" />
                     </span>
                     <span className="font-bold text-sm text-slate-900 dark:text-white truncate">{cat}</span>
@@ -157,7 +159,7 @@ export default function BudgetsSection({ budgets, monthTx, onEditBudget }) {
           <div className="section-title mb-2 px-1">Categorías sin presupuesto</div>
           <div className="flex flex-wrap gap-2">
             {withoutBudget.map((cat) => {
-              const Icon = getCategoryIcon(cat);
+              const Icon = getCategoryMeta(cat).Icon;
               return (
                 <button
                   key={cat}
